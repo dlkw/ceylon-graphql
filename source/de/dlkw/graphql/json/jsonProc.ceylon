@@ -42,7 +42,7 @@ JsonObject exe(Document doc, Schema schema, Anything rootValue)
 JsonObject? mkJsonObject(GQLObjectValue? gqlValue)
     => if (exists gqlValue) then JsonObject(gqlValue.value_.map((key->item) => key->mkJsonValue(item))) else null;
 
-Value mkJsonValue(Result? gqlValue)
+Value mkJsonValue(Result<Anything>? gqlValue)
 {
     switch (gqlValue)
     case (is Null) {
@@ -57,7 +57,7 @@ Value mkJsonValue(Result? gqlValue)
     case (is GQLObjectValue) {
         return mkJsonObject(gqlValue);
     }
-    case (is GQLListValue<Result>) {
+    case (is GQLListValue<Result<Anything>>) {
         return JsonArray(gqlValue.elements.map((element) => mkJsonValue(element)));
     }
     else {

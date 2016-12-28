@@ -32,8 +32,8 @@ shared class OperationDefinition(type, selectionSet, name = null, variableDefini
 {
     shared String? name;
     shared OperationType type;
-    {<String->VariableDefinition<Result>>*}? variableDefinitions_;
-    shared Map<String, VariableDefinition<Result>> variableDefinitions = if (exists variableDefinitions_) then map(variableDefinitions_) else map([]);
+    {<String->VariableDefinition<Result<Anything>>>*}? variableDefinitions_;
+    shared Map<String, VariableDefinition<Result<Anything>>> variableDefinitions = if (exists variableDefinitions_) then map(variableDefinitions_) else map([]);
     shared [Selection+] selectionSet;
 }
 
@@ -42,7 +42,7 @@ shared abstract class Undefined() of undefined
 shared object undefined extends Undefined(){}
 
 shared class VariableDefinition<Value>(type, defaultValue = undefined)
-    given Value satisfies Result
+    given Value satisfies Result<Anything>
 {
     shared GQLType<Value> type;
     shared Value?|Undefined defaultValue;
@@ -55,6 +55,7 @@ shared class OperationType of query | mutation
 }
 
 shared alias Selection => Field | FragmentSpread | InlineFragment;
+shared alias DocumentScalarValue => Integer|Float|String|Boolean|Null;
 
 shared class Field(name, alias_=null, arguments_=null, directives=null, selectionSet=null)
 {
@@ -80,7 +81,7 @@ shared class Argument(name, value_)
     shared String name;
     assertGQLName(name);
 
-    shared String | Null value_;
+    shared DocumentScalarValue value_;
 }
 
 shared class Directive()

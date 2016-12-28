@@ -70,13 +70,13 @@ shared class Schema(query, mutation)
         return ExtResultImplTODO(true, result, errors);
     }
 
-    Map<String, Result?>|QueryError coerceVariableValues(operationDefinition, variableValues, errors)
+    Map<String, Result<Anything>?>|QueryError coerceVariableValues(operationDefinition, variableValues, errors)
     {
         OperationDefinition operationDefinition;
         Map<String, Anything> variableValues;
         ListMutator<QueryError> errors;
 
-        variable [<String->Result?>*] coercedValues = [];
+        variable [<String->Result<Anything>?>*] coercedValues = [];
 
         variable Boolean hasErrors = false;
         for (variableName->variableDefinition in operationDefinition.variableDefinitions) {
@@ -93,7 +93,7 @@ shared class Schema(query, mutation)
             else {
                 value defaultValue = variableDefinition.defaultValue;
                 if (is Undefined defaultValue) {
-                    if (is GQLNonNullType<GQLType<Result>, Result> variableType = variableDefinition.type) {
+                    if (is GQLNonNullType<GQLType<Result<Anything>>, Result<Anything>> variableType = variableDefinition.type) {
                         errors.add(VariableCoercionError(variableName));
                         hasErrors = true;
                         continue;
@@ -111,16 +111,16 @@ shared class Schema(query, mutation)
         return map(coercedValues);
     }
 
-    Map<String, Result?>|FieldError coerceArgumentValues2(objectType, field, variableValues, errors, path)
+    Map<String, Result<Anything>?>|FieldError coerceArgumentValues2(objectType, field, variableValues, errors, path)
     {
         GQLObjectType objectType;
         Field field;
-        Map<String, Result?> variableValues;
+        Map<String, Result<Anything>?> variableValues;
 
         [String, <String|Integer>*] path;
         ListMutator<FieldError> errors;
 
-        variable [<String->Result?>*] coercedValues = [];
+        variable [<String->Result<Anything>?>*] coercedValues = [];
 
         value fieldType = objectType.fields[field.name];
         assert (exists fieldType);
@@ -140,7 +140,7 @@ shared class Schema(query, mutation)
             else {
                 value defaultValue = argumentDefinition.defaultValue;
                 if (is Undefined defaultValue) {
-                    if (is GQLNonNullType<GQLType<Result>, Result> argumentType = argumentDefinition.type) {
+                    if (is GQLNonNullType<GQLType<Result<Anything>>, Result<Anything>> argumentType = argumentDefinition.type) {
                         errors.add(ArgumentCoercionError(path, argumentName));
                         hasErrors = true;
                         continue;
@@ -163,7 +163,7 @@ shared class Schema(query, mutation)
         [Selection+] selectionSet;
         GQLObjectType objectType;
         Anything objectValue;
-        Map<String, Result?> variableValues;
+        Map<String, Result<Anything>?> variableValues;
 
         ListMutator<FieldError> errors;
         [String, <String|Integer>*]? executedPath;
@@ -174,7 +174,7 @@ shared class Schema(query, mutation)
         value groupedFieldSet = collectFields(objectType, selectionSet, variableValues);
 
         variable Boolean hasFieldErrors = false;
-        MutableMap<String, Result?> resultMap = HashMap<String, Result?>();
+        MutableMap<String, Result<Anything>?> resultMap = HashMap<String, Result<Anything>?>();
 
         for (responseKey->fields in groupedFieldSet) {
             String fieldName = fields.first.name;
@@ -202,7 +202,7 @@ shared class Schema(query, mutation)
 
     Map<String, [Field+]> collectFields<Value>(GQLType<Value> objectType, [Selection+] selectionSet, variableValues, MutableSet<Object>? visitedFragments=HashSet<Object>())
     {
-        Map<String, Result?> variableValues;
+        Map<String, Result<Anything>?> variableValues;
 
         MutableMap<String, [Field+]> groupedFields = HashMap<String, [Field+]>(linked);
         for (selection in selectionSet) {
@@ -231,14 +231,14 @@ shared class Schema(query, mutation)
         return groupedFields;
     }
 
-    Result? |NullForError executeField<Value>(objectType, objectValue, fieldType, fields, variableValues, errors, path, executor)
-        given Value satisfies Result
+    Result<Anything>? |NullForError executeField<Value>(objectType, objectValue, fieldType, fields, variableValues, errors, path, executor)
+        given Value satisfies Result<Anything>
     {
         GQLObjectType objectType;
         Anything objectValue;
         GQLType<Value> fieldType;
         [Field+] fields;
-        Map<String, Result?> variableValues;
+        Map<String, Result<Anything>?> variableValues;
 
         ListMutator<FieldError> errors;
         [String, <String|Integer>*] path;
@@ -261,7 +261,7 @@ shared class Schema(query, mutation)
     {
         GQLObjectType objectType;
         Anything objectValue;
-        Map<String, Result?> variableValues;
+        Map<String, Result<Anything>?> variableValues;
         return empty;
     }
 
@@ -270,7 +270,7 @@ shared class Schema(query, mutation)
         GQLObjectType objectType;
         Anything objectValue;
         String fieldName;
-        Map<String, Result?> argumentValues;
+        Map<String, Result<Anything>?> argumentValues;
 
         ListMutator<FieldError> errors;
         [String, <String|Integer>*] path;
@@ -303,12 +303,12 @@ shared class Schema(query, mutation)
         }
     }
 
-    Result? | NullForError innerCompleteValues(fieldType, fields, result, variableValues, inNonNull, errors, path, executor)
+    Result<Anything>? | NullForError innerCompleteValues(fieldType, fields, result, variableValues, inNonNull, errors, path, executor)
     {
         GQLType<Anything> fieldType;
         [Field+] fields;
         Anything result;
-        Map<String, Result?> variableValues;
+        Map<String, Result<Anything>?> variableValues;
 
         Boolean inNonNull;
 
@@ -331,7 +331,7 @@ shared class Schema(query, mutation)
             }
 
             variable Boolean hasFieldErrors = false;
-            MutableList<Result?> elementResults = ArrayList<Result?>();
+            MutableList<Result<Anything>?> elementResults = ArrayList<Result<Anything>?>();
             try {
                 for (i->v in result.indexed) {
                     value elementResult = completeValues(fieldType.inner, fields, v, variableValues, errors, path.withTrailing(i), executor);
@@ -350,9 +350,9 @@ shared class Schema(query, mutation)
             if (hasFieldErrors) {
                 return (inNonNull) then NullForError();
             }
-            return GQLListValue<Result>(elementResults.sequence());
+            return GQLListValue<Result<Anything>>(elementResults.sequence());
         }
-        case (is GQLScalarType<Result>) {
+        case (is GQLScalarType<Result<Anything>>) {
             return fieldType.coerceResult(result);
         }
         case (is GQLObjectType) {
@@ -376,10 +376,10 @@ shared class Schema(query, mutation)
         }
     }
 
-    Result? |NullForError completeValues<Value>(GQLType<Value> fieldType, [Field+] fields, Anything result, variableValues, errors, [String, <String|Integer>*] path, Executor executor)
-        given Value satisfies Result
+    Result<Anything>? |NullForError completeValues<Value>(GQLType<Value> fieldType, [Field+] fields, Anything result, variableValues, errors, [String, <String|Integer>*] path, Executor executor)
+        given Value satisfies Result<Anything>
     {
-        Map<String, Result?> variableValues;
+        Map<String, Result<Anything>?> variableValues;
 
         ListMutator<FieldError> errors;
 
@@ -461,31 +461,37 @@ shared interface ExtResult
     shared formal List<GQLError>? errors;
 }
 
-shared interface Result
+shared interface Result<out Value>
 {
-    // TODO what is a result
+    shared formal Value value_;
 }
-shared class GQLIntValue(shared Integer value_)
-    satisfies Result
+shared class GQLIntValue(Integer value__)
+    satisfies Result<Integer>
 {
-
+    if (value__ >= 2 ^ 31) {
+        throw OverflowException("could not coerce positive Integer to 32 bit");
+    }
+    if (value__ < -(2 ^ 31)) {
+        throw OverflowException("could not coerce negative Integer to 32 bit");
+    }
+    shared actual Integer value_=>value__;
 }
 
-shared class GQLStringValue(shared String value_)
-    satisfies Result
+shared class GQLStringValue(shared String value__)
+    satisfies Result<String>
 {
-
+    shared actual String value_=>value__;
 }
-shared class GQLObjectValue(shared Map<String, Result?> value_)
-    satisfies Result
+shared class GQLObjectValue(shared Map<String, Result<Anything>?> value__)
+    satisfies Result<Map<String, Result<Anything>?>>
 {
-
+    shared actual Map<String, Result<Anything>?> value_=>value__;
 }
 shared class GQLListValue<out Value>(shared Value?[] elements)
-    satisfies Result
-    given Value satisfies Result
+    satisfies Result<Value?[]>
+    given Value satisfies Result<Anything>
 {
-
+    shared actual Value?[] value_=>elements;
 }
 class ExtResultImplTODO(includedExecution, data, errors_)
     satisfies ExtResult

@@ -77,7 +77,7 @@ shared void listWithNullableIntsAreNotNull() {
     assertNull(result.errors);
 
     assertEquals(data.value_.size, 1);
-    assert (is GQLListValue<Result> f1 = data.value_["f1"]);
+    assert (is GQLListValue<Result<Anything>> f1 = data.value_["f1"]);
     assertEquals(f1.elements.size, 2);
     assert (is GQLIntValue el0 = f1.elements[0]);
     assertEquals(el0.value_, 5);
