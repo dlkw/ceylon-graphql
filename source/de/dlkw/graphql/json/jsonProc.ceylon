@@ -64,7 +64,11 @@ Value mkJsonValue(Result? gqlValue)
 }
 
 JsonArray mkJsonErrors({FieldError*} errors)
-    => JsonArray(errors.map((error)=>JsonObject({"message"->"not yet","location"->null,"path"->error.stringPath})));
+    => JsonArray(errors.map((error)=>JsonObject({
+            "message"->error.message,
+            if (exists locations = error.locations) then "locations"->locations else null,
+            "path"->error.stringPath
+        }.coalesced)));
 
 shared void run()
 {

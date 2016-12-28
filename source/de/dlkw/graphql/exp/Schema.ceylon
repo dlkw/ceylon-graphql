@@ -413,6 +413,9 @@ class PathComponent()
 
 shared class FieldError(path)
 {
+    shared String message => "not yet";
+    shared Null locations = null;
+
     shared [String, <String|Integer>*] path;
 
     shared String stringPath => "``path.first````"".join(path.rest.map((el)=>if (is String el) then "/``el``" else "[``el.string``]"))``";
