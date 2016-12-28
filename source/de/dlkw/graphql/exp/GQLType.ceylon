@@ -1,7 +1,13 @@
 shared interface GQLType<out Value>
     given Value satisfies Result
 {
-    shared formal Value coerceResult(Anything input);
+    "Coerces a result value obtained from field resolution to the corresponding GQLValue value
+     according to the GraphQL result coercion rules."
+    shared formal Value coerceResult(Anything result);
+
+    "Coerces an input value (variable or argument value) to the corresponding GQLValue value
+     according to the GraphQL input coercion rules."
+    shared formal Value | CoercionError coerceInput(Anything input);
 }
 
 shared abstract class GQLNullableType<out Value>()
@@ -17,8 +23,10 @@ shared class GQLNonNullType<out Inner, out Value>(inner)
 {
     shared Inner inner;
 
-    shared actual Value coerceResult(Anything input)
-        => inner.coerceResult(input);
+    shared actual Value coerceResult(Anything result)
+        => inner.coerceResult(result);
+
+    shared actual Value coerceInput(Anything input) => nothing;
 }
 
 shared class GQLListType<out Inner, out Value>(inner)
@@ -32,6 +40,8 @@ shared class GQLListType<out Inner, out Value>(inner)
     {
         return nothing;
     }
+
+    shared actual GQLListValue<Value> coerceInput(Anything input) => nothing;
 }
 
 shared abstract class GQLScalarType<out Value>()
@@ -78,6 +88,8 @@ shared class GQLEnumType({GQLEnumValue+} values)
         }
         throw AssertionError("not a String: ``value_?.string else "null"``");
     }
+
+    shared actual GQLStringValue coerceInput(Anything input) => nothing;
 }
 
 shared class GQLObjectType(name, {GQLField<Result>+} fields_, description=null)
@@ -92,6 +104,8 @@ shared class GQLObjectType(name, {GQLField<Result>+} fields_, description=null)
     {
         return nothing;
     }
+
+    shared actual GQLObjectValue coerceInput(Anything input) => nothing;
 }
 
 /*
@@ -129,6 +143,7 @@ shared class GQLIntType()
         throw AssertionError("not an Integer: ``value_?.string else "null"``");
     }
 
+    shared actual GQLIntValue coerceInput(Anything input) => nothing;
 }
 
 /*
@@ -145,6 +160,7 @@ class GQLStringType()
 {
     shared actual GQLStringValue coerceResult(Anything value_) => nothing;
 
+    shared actual GQLStringValue coerceInput(Anything input) => nothing;
 }
 
 /*
@@ -175,17 +191,35 @@ class GQLInputObjectType({GQLInputField+} fields)
     shared Map<String, GQLInputField> ffields = map(fields.map((field)=>field.name->field));
 }
 
-shared class GQLField<out Value>(name, type, description=null, arguments=[], deprecated=false, resolver=null)
+shared class GQLField<out Value>(name, type, description=null, arguments=emptyMap, deprecated=false, resolver=null)
 {
     shared String name;
     shared GQLType<Value> type;
     shared String? description;
     shared Boolean deprecated;
-    shared GQLType<Result>[] arguments;
-    shared Anything(Anything, Empty)? resolver;
+    shared Map<String, ArgumentDefinition<Result>> arguments;
+    shared Anything(Anything, Map<String, Result?>)? resolver;
 
     assertGQLName(name);
 }
+
+shared class ArgumentDefinition<out Value>(type, defaultValue=undefined)
+    given Value satisfies Result
+{
+    shared GQLType<Value> type;
+    "The default value used if no value is specified in the graphQL document.
+     May be null if null is the default value. If no default value is intended,
+     use value undefined."
+    shared Value?|Undefined defaultValue;
+}
+
+shared class GQLError(){}
+shared class QueryError()
+    extends GQLError()
+{}
+shared class CoercionError()
+    extends QueryError()
+{}
 
 /*
 shared void run()

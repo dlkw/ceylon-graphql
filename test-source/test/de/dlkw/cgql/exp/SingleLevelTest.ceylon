@@ -34,7 +34,7 @@ shared void singleIntMayBeNullAndIsNotNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
@@ -59,7 +59,7 @@ shared void singleIntMayBeNullAndIsNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
@@ -84,7 +84,7 @@ shared void singleIntMayBeNullAndIsError() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
@@ -112,7 +112,7 @@ shared void singleIntMayNotBeNullAndIsNotNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
@@ -137,7 +137,7 @@ shared void singleIntMayNotBeNullAndIsNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assertNull(result.data);
@@ -161,7 +161,7 @@ shared void singleIntMayNotBeNullAndIsError() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assertNull(result.data);
@@ -198,7 +198,7 @@ shared void withNonNullBeforeAndAfterIntMayBeNullAndIsNotNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f0"), Field("f1"), Field("f2")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
@@ -237,7 +237,7 @@ shared void withNonNullBeforeAndAfterIntMayBeNullAndIsNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f0"), Field("f1"), Field("f2")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
@@ -276,7 +276,7 @@ shared void withNonNullBeforeAndAfterIntMayBeNullAndIsError() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f0"), Field("f1"), Field("f2")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
@@ -318,7 +318,7 @@ shared void withNonNullBeforeAndAfterIntMayNotBeNullAndIsNotNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f0"), Field("f1"), Field("f2")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
@@ -357,7 +357,7 @@ shared void withNonNullBeforeAndAfterIntMayNotBeNullAndIsNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f0"), Field("f1"), Field("f2")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assertNull(result.data);
@@ -392,7 +392,7 @@ shared void withNonNullBeforeAndAfterIntMayNotBeNullAndIsError() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f0"), Field("f1"), Field("f2")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assertNull(result.data);
@@ -427,7 +427,7 @@ shared void withErrorsBeforeAndAfterIntMayNotBeNullAndIsNotNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f0"), Field("f1"), Field("f2")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
@@ -472,7 +472,7 @@ shared void withErrorsBeforeAndAfterIntMayNotBeNullAndIsNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f0"), Field("f1"), Field("f2")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assertNull(result.data);
@@ -511,7 +511,7 @@ shared void withErrorsBeforeAndAfterIntMayBeNullAndIsError() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f0"), Field("f1"), Field("f2")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);

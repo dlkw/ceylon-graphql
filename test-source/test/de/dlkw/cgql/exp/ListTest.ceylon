@@ -41,7 +41,7 @@ shared void listWithIntNotIterable() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
 
     assertTrue(result.includedExecution);
@@ -70,7 +70,7 @@ shared void listWithNullableIntsAreNotNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
@@ -100,7 +100,7 @@ shared void listWithNullableIntsIsErrorNonNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
@@ -129,7 +129,7 @@ shared void listWithNonNullIntsIsNullNonNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.execute(document);
+    value result = schema.executeRequest(document);
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);

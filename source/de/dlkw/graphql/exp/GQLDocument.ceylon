@@ -28,11 +28,24 @@ shared class Document(definitions)
     }
 }
 
-shared class OperationDefinition(type, selectionSet, name = null)
+shared class OperationDefinition(type, selectionSet, name = null, variableDefinitions_ = null)
 {
     shared String? name;
     shared OperationType type;
+    {<String->VariableDefinition<Result>>*}? variableDefinitions_;
+    shared Map<String, VariableDefinition<Result>> variableDefinitions = if (exists variableDefinitions_) then map(variableDefinitions_) else map([]);
     shared [Selection+] selectionSet;
+}
+
+shared abstract class Undefined() of undefined
+{}
+shared object undefined extends Undefined(){}
+
+shared class VariableDefinition<Value>(type, defaultValue = undefined)
+    given Value satisfies Result
+{
+    shared GQLType<Value> type;
+    shared Value?|Undefined defaultValue;
 }
 
 shared class OperationType of query | mutation
@@ -43,7 +56,7 @@ shared class OperationType of query | mutation
 
 shared alias Selection => Field | FragmentSpread | InlineFragment;
 
-shared class Field(name, alias_=null, arguments=null, directives=null, selectionSet=null)
+shared class Field(name, alias_=null, arguments_=null, directives=null, selectionSet=null)
 {
     shared String name;
     assertGQLName(name);
@@ -55,7 +68,8 @@ shared class Field(name, alias_=null, arguments=null, directives=null, selection
 
     shared String responseKey => if (exists alias_) then alias_ else name;
 
-    shared [Argument+]? arguments;
+    [Argument+]? arguments_;
+    shared Map<String, Anything> arguments = if (exists arguments_) then map(arguments_.map((arg)=>arg.name->arg.value_)) else emptyMap;
     shared [Directive+]? directives;
 
     shared [Selection+]? selectionSet;

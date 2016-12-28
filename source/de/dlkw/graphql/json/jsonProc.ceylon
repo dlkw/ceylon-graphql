@@ -21,12 +21,14 @@ import de.dlkw.graphql.exp {
     GQLEnumType,
     GQLEnumValue,
     GQLStringValue,
-    FieldError
+    FieldError,
+    GQLError,
+    QueryError
 }
 
 JsonObject exe(Document doc, Schema schema, Anything rootValue)
 {
-    value res = schema.execute(doc, null, rootValue);
+    value res = schema.executeRequest(doc, null, rootValue);
     if (res.includedExecution) {
         if (exists errors = res.errors) {
             return JsonObject({"data" -> mkJsonObject(res.data), "errors"->mkJsonErrors(errors)});
@@ -63,12 +65,24 @@ Value mkJsonValue(Result? gqlValue)
     }
 }
 
-JsonArray mkJsonErrors({FieldError*} errors)
-    => JsonArray(errors.map((error)=>JsonObject({
-            "message"->error.message,
-            if (exists locations = error.locations) then "locations"->locations else null,
-            "path"->error.stringPath
-        }.coalesced)));
+JsonArray mkJsonErrors({GQLError*} errors)
+    => JsonArray(errors.map((error)
+        {
+            if (is FieldError error) {
+                return JsonObject({
+                    "message"->error.message,
+                    if (exists locations = error.locations) then "locations"->locations else null,
+                    "path"->error.stringPath
+                }.coalesced);
+            }
+            else if (is QueryError error) {
+                return JsonObject({"message"->"query error"});
+            }
+            else {
+                throw;
+            }
+        }
+    ));
 
 shared void run()
 {
