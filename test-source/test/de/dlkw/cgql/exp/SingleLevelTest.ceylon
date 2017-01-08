@@ -6,27 +6,33 @@ import ceylon.test {
 }
 
 import de.dlkw.graphql.exp {
-    GQLObjectType,
-    GQLField,
-    GQLIntType,
     Document,
     Schema,
     OperationDefinition,
     Field,
     OperationType,
-    GQLIntValue,
     ResolvingError,
-    GQLNonNullType,
     FieldNullError
+}
+import de.dlkw.graphql.exp.types {
+    GQLObjectType,
+    GQLField,
+    gqlIntType,
+    GQLNonNullType
+}
+import ceylon.logging {
+    addLogWriter,
+    writeSimpleLog
 }
 
 test
 shared void singleIntMayBeNullAndIsNotNull() {
+    addLogWriter(writeSimpleLog);
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f1";
-                    GQLIntType();
-            resolver = (a, e) => 5;
+                    gqlIntType;
+            //resolver = (a, e) => 5;
         }
     });
 
@@ -34,15 +40,15 @@ shared void singleIntMayBeNullAndIsNotNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.executeRequest(document);
+    value result = schema.executeRequest(document, null, map({"f1"->5}));
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
     assertNull(result.errors);
 
-    assertEquals(data.value_.size, 1);
-    assert (is GQLIntValue f1 = data.value_["f1"]);
-    assertEquals(f1.value_, 5);
+    assertEquals(data.size, 1);
+    assert (is Integer f1 = data["f1"]);
+    assertEquals(f1, 5);
 }
 
 test
@@ -50,7 +56,7 @@ shared void singleIntMayBeNullAndIsNull() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f1";
-                    GQLIntType();
+                    gqlIntType;
             resolver = (a, e) => null;
         }
     });
@@ -65,9 +71,9 @@ shared void singleIntMayBeNullAndIsNull() {
     assert (exists data = result.data);
     assertNull(result.errors);
 
-    assertEquals(data.value_.size, 1);
-    assertTrue(data.value_.defines("f1"));
-    assert (is Null f1 = data.value_["f1"]);
+    assertEquals(data.size, 1);
+    assertTrue(data.defines("f1"));
+    assert (is Null f1 = data["f1"]);
 }
 
 test
@@ -75,7 +81,7 @@ shared void singleIntMayBeNullAndIsError() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f1";
-                    GQLIntType();
+                    gqlIntType;
             resolver = (a, e) => 5 / 0;
         }
     });
@@ -88,9 +94,9 @@ shared void singleIntMayBeNullAndIsError() {
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
-    assertEquals(data.value_.size, 1);
-    assertTrue(data.value_.defines("f1"));
-    assert (is Null f1 = data.value_["f1"]);
+    assertEquals(data.size, 1);
+    assertTrue(data.defines("f1"));
+    assert (is Null f1 = data["f1"]);
 
     assert (exists errors = result.errors);
     assertEquals(errors.size, 1);
@@ -103,7 +109,7 @@ shared void singleIntMayNotBeNullAndIsNotNull() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f1";
-            type = GQLNonNullType(GQLIntType());
+            type = GQLNonNullType(gqlIntType);
             resolver = (a, e) => 5;
         }
     });
@@ -118,9 +124,9 @@ shared void singleIntMayNotBeNullAndIsNotNull() {
     assert (exists data = result.data);
     assertNull(result.errors);
 
-    assertEquals(data.value_.size, 1);
-    assert (is GQLIntValue f1 = data.value_["f1"]);
-    assertEquals(f1.value_, 5);
+    assertEquals(data.size, 1);
+    assert (is Integer f1 = data["f1"]);
+    assertEquals(f1, 5);
 }
 
 test
@@ -128,7 +134,7 @@ shared void singleIntMayNotBeNullAndIsNull() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f1";
-            type = GQLNonNullType(GQLIntType());
+            type = GQLNonNullType(gqlIntType);
             resolver = (a, e) => null;
         }
     });
@@ -152,7 +158,7 @@ shared void singleIntMayNotBeNullAndIsError() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f1";
-            type = GQLNonNullType(GQLIntType());
+            type = GQLNonNullType(gqlIntType);
             resolver = (a, e) => 5 / 0;
         }
     });
@@ -179,17 +185,17 @@ shared void withNonNullBeforeAndAfterIntMayBeNullAndIsNotNull() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f0";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 0;
         },
         GQLField {
             name = "f1";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 5;
         },
         GQLField {
             name = "f2";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 2;
         }
     });
@@ -204,13 +210,13 @@ shared void withNonNullBeforeAndAfterIntMayBeNullAndIsNotNull() {
     assert (exists data = result.data);
     assertNull(result.errors);
 
-    assertEquals(data.value_.size, 3);
-    assert (is GQLIntValue f0 = data.value_["f0"]);
-    assertEquals(f0.value_, 0);
-    assert (is GQLIntValue f1 = data.value_["f1"]);
-    assertEquals(f1.value_, 5);
-    assert (is GQLIntValue f2 = data.value_["f2"]);
-    assertEquals(f2.value_, 2);
+    assertEquals(data.size, 3);
+    assert (is Integer f0 = data["f0"]);
+    assertEquals(f0, 0);
+    assert (is Integer f1 = data["f1"]);
+    assertEquals(f1, 5);
+    assert (is Integer f2 = data["f2"]);
+    assertEquals(f2, 2);
 }
 
 test
@@ -218,17 +224,17 @@ shared void withNonNullBeforeAndAfterIntMayBeNullAndIsNull() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f0";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 0;
         },
         GQLField {
             name = "f1";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => null;
         },
         GQLField {
             name = "f2";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 2;
         }
     });
@@ -243,13 +249,13 @@ shared void withNonNullBeforeAndAfterIntMayBeNullAndIsNull() {
     assert (exists data = result.data);
     assertNull(result.errors);
 
-    assertEquals(data.value_.size, 3);
-    assert (is GQLIntValue f0 = data.value_["f0"]);
-    assertEquals(f0.value_, 0);
-    assertTrue(data.value_.defines("f1"));
-    assert (is Null f1 = data.value_["f1"]);
-    assert (is GQLIntValue f2 = data.value_["f2"]);
-    assertEquals(f2.value_, 2);
+    assertEquals(data.size, 3);
+    assert (is Integer f0 = data["f0"]);
+    assertEquals(f0, 0);
+    assertTrue(data.defines("f1"));
+    assert (is Null f1 = data["f1"]);
+    assert (is Integer f2 = data["f2"]);
+    assertEquals(f2, 2);
 }
 
 test
@@ -257,17 +263,17 @@ shared void withNonNullBeforeAndAfterIntMayBeNullAndIsError() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f0";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 0;
         },
         GQLField {
             name = "f1";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 5/0;
         },
         GQLField {
             name = "f2";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 2;
         }
     });
@@ -280,13 +286,13 @@ shared void withNonNullBeforeAndAfterIntMayBeNullAndIsError() {
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
-    assertEquals(data.value_.size, 3);
-    assert (is GQLIntValue f0 = data.value_["f0"]);
-    assertEquals(f0.value_, 0);
-    assertTrue(data.value_.defines("f1"));
-    assert (is Null f1 = data.value_["f1"]);
-    assert (is GQLIntValue f2 = data.value_["f2"]);
-    assertEquals(f2.value_, 2);
+    assertEquals(data.size, 3);
+    assert (is Integer f0 = data["f0"]);
+    assertEquals(f0, 0);
+    assertTrue(data.defines("f1"));
+    assert (is Null f1 = data["f1"]);
+    assert (is Integer f2 = data["f2"]);
+    assertEquals(f2, 2);
 
     assert (exists errors = result.errors);
     assertEquals(errors.size, 1);
@@ -299,17 +305,17 @@ shared void withNonNullBeforeAndAfterIntMayNotBeNullAndIsNotNull() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f0";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 0;
         },
         GQLField {
             name = "f1";
-            type = GQLNonNullType(GQLIntType());
+            type = GQLNonNullType(gqlIntType);
             resolver = (a, e) => 5;
         },
         GQLField {
             name = "f2";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 2;
         }
     });
@@ -324,13 +330,13 @@ shared void withNonNullBeforeAndAfterIntMayNotBeNullAndIsNotNull() {
     assert (exists data = result.data);
     assertNull(result.errors);
 
-    assertEquals(data.value_.size, 3);
-    assert (is GQLIntValue f0 = data.value_["f0"]);
-    assertEquals(f0.value_, 0);
-    assert (is GQLIntValue f1 = data.value_["f1"]);
-    assertEquals(f1.value_, 5);
-    assert (is GQLIntValue f2 = data.value_["f2"]);
-    assertEquals(f2.value_, 2);
+    assertEquals(data.size, 3);
+    assert (is Integer f0 = data["f0"]);
+    assertEquals(f0, 0);
+    assert (is Integer f1 = data["f1"]);
+    assertEquals(f1, 5);
+    assert (is Integer f2 = data["f2"]);
+    assertEquals(f2, 2);
 }
 
 test
@@ -338,17 +344,17 @@ shared void withNonNullBeforeAndAfterIntMayNotBeNullAndIsNull() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f0";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 0;
         },
         GQLField {
             name = "f1";
-            type = GQLNonNullType(GQLIntType());
+            type = GQLNonNullType(gqlIntType);
             resolver = (a, e) => null;
         },
         GQLField {
             name = "f2";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 2;
         }
     });
@@ -373,17 +379,17 @@ shared void withNonNullBeforeAndAfterIntMayNotBeNullAndIsError() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f0";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 0;
         },
         GQLField {
             name = "f1";
-            type = GQLNonNullType(GQLIntType());
+            type = GQLNonNullType(gqlIntType);
             resolver = (a, e) => 5/0;
         },
         GQLField {
             name = "f2";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 2;
         }
     });
@@ -408,17 +414,17 @@ shared void withErrorsBeforeAndAfterIntMayNotBeNullAndIsNotNull() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f0";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 1/0;
         },
         GQLField {
             name = "f1";
-            type = GQLNonNullType(GQLIntType());
+            type = GQLNonNullType(gqlIntType);
             resolver = (a, e) => 5;
         },
         GQLField {
             name = "f2";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 2/0;
         }
     });
@@ -432,13 +438,13 @@ shared void withErrorsBeforeAndAfterIntMayNotBeNullAndIsNotNull() {
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
 
-    assertEquals(data.value_.size, 3);
-    assertTrue(data.value_.defines("f0"));
-    assert (is Null f0 = data.value_["f0"]);
-    assert (is GQLIntValue f1 = data.value_["f1"]);
-    assertEquals(f1.value_, 5);
-    assertTrue(data.value_.defines("f2"));
-    assert (is Null f2 = data.value_["f2"]);
+    assertEquals(data.size, 3);
+    assertTrue(data.defines("f0"));
+    assert (is Null f0 = data["f0"]);
+    assert (is Integer f1 = data["f1"]);
+    assertEquals(f1, 5);
+    assertTrue(data.defines("f2"));
+    assert (is Null f2 = data["f2"]);
 
     assert (exists errors = result.errors);
     assertEquals(errors.size, 2);
@@ -453,17 +459,17 @@ shared void withErrorsBeforeAndAfterIntMayNotBeNullAndIsNull() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f0";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 1/0;
         },
         GQLField {
             name = "f1";
-            type = GQLNonNullType(GQLIntType());
+            type = GQLNonNullType(gqlIntType);
             resolver = (a, e) => null;
         },
         GQLField {
             name = "f2";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 2/0;
         }
     });
@@ -492,17 +498,17 @@ shared void withErrorsBeforeAndAfterIntMayBeNullAndIsError() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f0";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 1/0;
         },
         GQLField {
             name = "f1";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 5/0;
         },
         GQLField {
             name = "f2";
-            type = GQLIntType();
+            type = gqlIntType;
             resolver = (a, e) => 2/0;
         }
     });
@@ -515,13 +521,13 @@ shared void withErrorsBeforeAndAfterIntMayBeNullAndIsError() {
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
-    assertEquals(data.value_.size, 3);
-    assertTrue(data.value_.defines("f0"));
-    assertTrue(data.value_.defines("f1"));
-    assertTrue(data.value_.defines("f2"));
-    assertNull(data.value_["f0"]);
-    assertNull(data.value_["f1"]);
-    assertNull(data.value_["f2"]);
+    assertEquals(data.size, 3);
+    assertTrue(data.defines("f0"));
+    assertTrue(data.defines("f1"));
+    assertTrue(data.defines("f2"));
+    assertNull(data["f0"]);
+    assertNull(data["f1"]);
+    assertNull(data["f2"]);
 
     assert (exists errors = result.errors);
     assertEquals(errors.size, 3);

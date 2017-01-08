@@ -3,4 +3,5 @@ module de.dlkw.graphql.exp "0.0.1"
 {
     import ceylon.collection "1.3.1";
     import ceylon.logging "1.3.1";
+    shared import ceylon.time "1.3.1";
 }

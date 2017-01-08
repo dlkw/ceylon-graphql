@@ -9,23 +9,104 @@ import ceylon.collection {
     ListMutator
 }
 import ceylon.language.meta {
-    type,
-    typeLiteral
+    type
 }
 import ceylon.logging {
     Logger,
     logger
 }
+import ceylon.language.meta.declaration {
+    FunctionDeclaration
+}
+import ceylon.language.meta.model {
+    Attribute,
+    Type,
+    Class
+}
+import de.dlkw.graphql.exp.types {
+    GQLObjectType,
+    GQLField,
+    GQLEnumType,
+    GQLType,
+    GQLListType,
+    GQLNonNullType,
+    CoercionError,
+    Undefined,
+    GQLAbstractObjectType,
+    GQLScalarType,
+    GQLTypeReference,
+    resolveAllTypeReferences
+}
 
 Logger log = logger(`module`);
 
-shared class Schema(query, mutation)
+shared class Schema(query_, mutation)
 {
-    shared GQLObjectType query;
+    GQLObjectType query_;
     shared GQLObjectType? mutation;
 
-    shared ExtResult executeRequest(document, operationName=null, rootValue=null, executor=normalExecutor)
+    value introspectionSchemaField = GQLField{
+        name="__schema";
+        type=introspection.typeSchema;
+    };
+
+    class GQLObjectTypeWrapper(GQLObjectType wrapped)
+            extends GQLObjectType(wrapped.name, wrapped.fields.items.chain([introspectionSchemaField]), wrapped.description)
     {
+    }
+    shared GQLObjectType query = GQLObjectTypeWrapper(query_);
+
+    MutableMap<String, GQLObjectType | GQLEnumType> types = HashMap<String, GQLObjectType | GQLEnumType>();
+    {GQLObjectType*} allIntrospectionTypes = {
+        introspection.typeSchema
+        ,
+        introspection.typeType
+    };
+
+    void internalRegisterType(GQLObjectType | GQLEnumType type)
+    {
+        log.info("registering type ``type.name``");
+        if (type.name.startsWith("__")) {
+            throw; // TODO
+        }
+
+        value registeredType = types[type.name];
+        if (exists registeredType) {
+            if (!type === registeredType) {
+                throw ; // TODO
+            }
+        }
+        else {
+            types.put(type.name, type);
+        }
+
+        if (is GQLObjectType type) {
+            for (field in type.fields.items) {
+                if (is GQLObjectType | GQLEnumType fieldType = field.type) {
+                    internalRegisterType(fieldType);
+                }
+            }
+        }
+    }
+
+    internalRegisterType(query_);
+
+    //    for (t in introspection.introspectionType.fields.items.map(
+//        (f)=>f.type)
+//        .narrow<GQLTypeReference>())
+//    {
+//        resolveTypeReference(t);
+//    }
+
+    shared void registerType(GQLObjectType | GQLEnumType type)
+    {
+        internalRegisterType(type);
+    }
+
+    shared ExtResult executeRequest(document, operationName=null, rootValue=object{}, executor=normalExecutor)
+    {
+        print(allIntrospectionTypes);
+        print(types);
         Document document;
         String? operationName;
 
@@ -63,26 +144,26 @@ shared class Schema(query, mutation)
             topLevelExecutor = serialExecutor;
         }
 
-        value result = executeSelectionSet(operationDefinition.selectionSet, rootType, rootValue, coercedVariables, errors, null, executor);
+        value result = executeSelectionSet(operationDefinition.selectionSet, rootType, rootValue, coercedVariables, errors, null, executor, true);
         if (is NullForError result) {
             return ExtResultImplTODO(true, null, errors);
         }
         return ExtResultImplTODO(true, result, errors);
     }
 
-    Map<String, Result<Anything>?>|QueryError coerceVariableValues(operationDefinition, variableValues, errors)
+    Map<String, Anything> | QueryError coerceVariableValues(operationDefinition, variableValues, errors)
     {
         OperationDefinition operationDefinition;
         Map<String, Anything> variableValues;
         ListMutator<QueryError> errors;
 
-        variable [<String->Result<Anything>?>*] coercedValues = [];
+        variable [<String->Anything>*] coercedValues = [];
 
         variable Boolean hasErrors = false;
         for (variableName->variableDefinition in operationDefinition.variableDefinitions) {
             if (variableValues.defines(variableName)) {
                 value value_ = variableValues[variableName];
-                value providedValue = variableDefinition.type.coerceInput(value_);
+                value providedValue = variableDefinition.type.dCI(value_);
                 if (is CoercionError providedValue) {
                     errors.add(VariableCoercionError(variableName));
                     hasErrors = true;
@@ -93,7 +174,7 @@ shared class Schema(query, mutation)
             else {
                 value defaultValue = variableDefinition.defaultValue;
                 if (is Undefined defaultValue) {
-                    if (is GQLNonNullType<GQLType<Result<Anything>>, Result<Anything>> variableType = variableDefinition.type) {
+                    if (is GQLNonNullType<GQLType<>> variableType = variableDefinition.type) {
                         errors.add(VariableCoercionError(variableName));
                         hasErrors = true;
                         continue;
@@ -111,16 +192,16 @@ shared class Schema(query, mutation)
         return map(coercedValues);
     }
 
-    Map<String, Result<Anything>?>|FieldError coerceArgumentValues2(objectType, field, variableValues, errors, path)
+    Map<String, Anything> | FieldError coerceArgumentValues2(objectType, field, variableValues, errors, path)
     {
-        GQLObjectType objectType;
+        GQLAbstractObjectType objectType;
         Field field;
-        Map<String, Result<Anything>?> variableValues;
+        Map<String, Anything> variableValues;
 
         [String, <String|Integer>*] path;
         ListMutator<FieldError> errors;
 
-        variable [<String->Result<Anything>?>*] coercedValues = [];
+        variable [<String->Anything>*] coercedValues = [];
 
         value fieldType = objectType.fields[field.name];
         assert (exists fieldType);
@@ -129,7 +210,7 @@ shared class Schema(query, mutation)
         for (argumentName->argumentDefinition in fieldType.arguments) {
             if (field.arguments.defines(argumentName)) {
                 value value_ = field.arguments[argumentName];
-                value providedValue = argumentDefinition.type.coerceInput(value_);
+                value providedValue = argumentDefinition.type.dCI(value_);
                 if (is CoercionError providedValue) {
                     errors.add(ArgumentCoercionError(path, argumentName));
                     hasErrors = true;
@@ -140,7 +221,7 @@ shared class Schema(query, mutation)
             else {
                 value defaultValue = argumentDefinition.defaultValue;
                 if (is Undefined defaultValue) {
-                    if (is GQLNonNullType<GQLType<Result<Anything>>, Result<Anything>> argumentType = argumentDefinition.type) {
+                    if (is GQLNonNullType<GQLType<>> argumentType = argumentDefinition.type) {
                         errors.add(ArgumentCoercionError(path, argumentName));
                         hasErrors = true;
                         continue;
@@ -153,40 +234,55 @@ shared class Schema(query, mutation)
             }
         }
         if (hasErrors) {
-            return FieldError(path);
+            return FieldError("could not coerce arguments", path);
         }
         return map(coercedValues);
     }
 
-    GQLObjectValue? | NullForError executeSelectionSet(selectionSet, objectType, objectValue, variableValues, errors, executedPath, executor)
+    Map<String, Anything> | NullForError executeSelectionSet(selectionSet, objectType, objectValue, variableValues, errors, executedPath, executor, topLevel)
     {
         [Selection+] selectionSet;
-        GQLObjectType objectType;
+        GQLAbstractObjectType objectType;
         Anything objectValue;
-        Map<String, Result<Anything>?> variableValues;
+        Map<String, Anything> variableValues;
 
         ListMutator<FieldError> errors;
         [String, <String|Integer>*]? executedPath;
         Executor executor;
 
-        print("execute selection set ``executedPath else "null"``");
+        Boolean topLevel;
+
+        log.debug("execute selection set ``executedPath else "null"``");
 
         value groupedFieldSet = collectFields(objectType, selectionSet, variableValues);
 
         variable Boolean hasFieldErrors = false;
-        MutableMap<String, Result<Anything>?> resultMap = HashMap<String, Result<Anything>?>();
+        MutableMap<String, Anything> resultMap = HashMap<String, Anything>();
+
+        value fieldDefinitions = objectType.fields;
 
         for (responseKey->fields in groupedFieldSet) {
+            value pathToExecute = executedPath?.withTrailing(responseKey) else [responseKey];
+
+            // TODO start a try/catch here to convert exceptions to field errors with corresponding path
+
             String fieldName = fields.first.name;
 
-            value fieldDefinition = objectType.fields[fieldName];
+            Anything usedObjectValue;
+            value fieldDefinition = fieldDefinitions[fieldName];
             if (is Null fieldDefinition) {
                 // when can this happen?
                 continue;
             }
 
-            value pathToExecute = executedPath?.withTrailing(fieldName) else [fieldName];
-            value responseValue = executeField(objectType, objectValue, fieldDefinition.type, fields, variableValues, errors, pathToExecute, executor);
+            if (topLevel && fieldName == "__schema") {
+                usedObjectValue = IntrospectionSupport(types.items, query, mutation, []);
+            }
+            else {
+                usedObjectValue = objectValue;
+            }
+
+            value responseValue = executeField(objectType, usedObjectValue, fieldDefinition.type, fields, variableValues, errors, pathToExecute, executor);
             if (is NullForError responseValue) {
                 hasFieldErrors = true;
             }
@@ -197,12 +293,12 @@ shared class Schema(query, mutation)
         if (hasFieldErrors) {
             return NullForError();
         }
-        return GQLObjectValue(resultMap);
+        return resultMap;
     }
 
-    Map<String, [Field+]> collectFields<Value>(GQLType<Value> objectType, [Selection+] selectionSet, variableValues, MutableSet<Object>? visitedFragments=HashSet<Object>())
+    Map<String, [Field+]> collectFields(GQLAbstractObjectType objectType, [Selection+] selectionSet, variableValues, MutableSet<Object>? visitedFragments=HashSet<Object>())
     {
-        Map<String, Result<Anything>?> variableValues;
+        Map<String, Anything> variableValues;
 
         MutableMap<String, [Field+]> groupedFields = HashMap<String, [Field+]>(linked);
         for (selection in selectionSet) {
@@ -231,51 +327,53 @@ shared class Schema(query, mutation)
         return groupedFields;
     }
 
-    Result<Anything>? |NullForError executeField<Value>(objectType, objectValue, fieldType, fields, variableValues, errors, path, executor)
-        given Value satisfies Result<Anything>
+    "Returns type [[Null]], [[Integer]], [[Float]], [[String]], [[Boolean]],
+     or a [[List]] of these 7 types,
+     or a [[Map]] mapping Strings to any of these 7 types.
+     Returns [[NullForError]] if the executed field gets a null value because of error propagation
+     from a field error in a non-nullable field in [[fields]]."
+    Anything | NullForError executeField(objectType, objectValue, fieldType, fields, variableValues, errors, path, executor)
     {
-        GQLObjectType objectType;
+        GQLAbstractObjectType objectType;
         Anything objectValue;
-        GQLType<Value> fieldType;
+        GQLType<> fieldType;
         [Field+] fields;
-        Map<String, Result<Anything>?> variableValues;
+        Map<String, Anything> variableValues;
 
         ListMutator<FieldError> errors;
         [String, <String|Integer>*] path;
 
         Executor executor;
 
-        print("execute field ``path``");
+        log.debug("execute field ``path``");
 
         Field field = fields.first;
 
         value argumentValues = coerceArgumentValues2(objectType, field, variableValues, errors, path);
         if (is FieldError argumentValues) {
-            return nothing;
+            return null;
         }
         value resolvedValue = resolveFieldValue(objectType, objectValue, field.name, argumentValues, errors, path);
+        // a field error from resolution will be converted to null or propagated up by the completeValues call
         return completeValues(fieldType, fields, resolvedValue, variableValues, errors, path, executor);
     }
 
-    Empty coerceArgumentValues(objectType, objectValue, variableValues)
+    Anything | ResolvingError resolveFieldValue(objectType, objectValue, fieldName, argumentValues, errors, path)
     {
-        GQLObjectType objectType;
-        Anything objectValue;
-        Map<String, Result<Anything>?> variableValues;
-        return empty;
-    }
-
-    Anything resolveFieldValue(objectType, objectValue, fieldName, argumentValues, errors, path)
-    {
-        GQLObjectType objectType;
+        GQLAbstractObjectType objectType;
         Anything objectValue;
         String fieldName;
-        Map<String, Result<Anything>?> argumentValues;
+        Map<String, Anything> argumentValues;
 
         ListMutator<FieldError> errors;
         [String, <String|Integer>*] path;
 
-        print("resolving ``path``");
+        log.debug("resolving ``path``");
+
+        // FIXME/TODO: move this after exists resolver to make resolver work even if no (root) object is given?
+        if (is Null objectValue) {
+            return null;
+        }
 
         value fieldDefinition = objectType.fields[fieldName];
         assert (exists fieldDefinition);
@@ -285,30 +383,60 @@ shared class Schema(query, mutation)
                 return resolver(objectValue, argumentValues);
             }
             catch (Throwable throwable) {
+                log.error("err: ", throwable);
                 value error = ResolvingError(path);
                 errors.add(error);
                 return error;
             }
         }
 
-        if (is Null objectValue) {
-            return null;
-        }
-
         if (is Map<String, Anything> objectValue) {
             return objectValue[fieldName];
         }
         else {
-            return type(objectValue).getAttribute<Nothing, Anything>(fieldName)?.bind(objectValue)?.get();
+            return getDyn(objectValue, fieldName);
         }
     }
 
-    Result<Anything>? | NullForError innerCompleteValues(fieldType, fields, result, variableValues, inNonNull, errors, path, executor)
+    Anything | NullForError completeValues(fieldType, fields, result, variableValues, errors, path, executor)
     {
-        GQLType<Anything> fieldType;
+        GQLType<> fieldType;
         [Field+] fields;
         Anything result;
-        Map<String, Result<Anything>?> variableValues;
+        Map<String, Anything> variableValues;
+
+        ListMutator<FieldError> errors;
+        [String, <String|Integer>*] path;
+
+        Executor executor;
+
+        log.debug("complete ``path``");
+
+        if (is GQLNonNullType<GQLType<>> fieldType) {
+            if (is FieldError result) {
+                return NullForError();
+            }
+
+            value completedResult = innerCompleteValues(fieldType.inner, fields, result, variableValues, true, errors, path, executor);
+            if (!is NullForError completedResult, is Null v = completedResult) {
+                log.error("resolved a null value for non-null typed field ``path``");
+                value error = FieldNullError(path);
+                errors.add(error);
+                return NullForError();
+            }
+            return completedResult;
+        }
+
+        value completedResult = innerCompleteValues(fieldType, fields, result, variableValues, false, errors, path, executor);
+        return completedResult;
+    }
+
+    Anything | NullForError innerCompleteValues(fieldType, fields, result, variableValues, inNonNull, errors, path, executor)
+    {
+        GQLType<> fieldType;
+        [Field+] fields;
+        Anything result;
+        Map<String, Anything> variableValues;
 
         Boolean inNonNull;
 
@@ -324,16 +452,20 @@ shared class Schema(query, mutation)
         }
 
         switch (fieldType)
-        case (is GQLListType<GQLType<Anything>, Anything>) {
+        case (is GQLListType<GQLType<>>) {
             if (!is Iterable<Anything> result) {
                 errors.add(ResolvedNotIterableError(path));
                 return (inNonNull) then NullForError();
             }
 
+            // for convenience, use items of a map as list entries.
+            // may not be what is desired if items don't contain the map keys.
+            {Anything*} iterable = if (is Map<Anything, Anything> result) then result.items else result;
+
             variable Boolean hasFieldErrors = false;
-            MutableList<Result<Anything>?> elementResults = ArrayList<Result<Anything>?>();
+            MutableList<Anything> elementResults = ArrayList<Anything>();
             try {
-                for (i->v in result.indexed) {
+                for (i->v in iterable.indexed) {
                     value elementResult = completeValues(fieldType.inner, fields, v, variableValues, errors, path.withTrailing(i), executor);
                     if (is NullForError elementResult) {
                         hasFieldErrors = true;
@@ -350,20 +482,27 @@ shared class Schema(query, mutation)
             if (hasFieldErrors) {
                 return (inNonNull) then NullForError();
             }
-            return GQLListValue<Result<Anything>>(elementResults.sequence());
+            return elementResults.sequence();
         }
-        case (is GQLScalarType<Result<Anything>>) {
+        case (is GQLScalarType<Anything> | GQLEnumType) {
             return fieldType.coerceResult(result);
         }
-        case (is GQLObjectType) {
-            value subSelectionSet = mergeSelectionSets(fields);
-            value resultObjectValue = executeSelectionSet(subSelectionSet, fieldType, result, variableValues, errors, path, executor);
-            if (!inNonNull) {
-                if (is NullForError resultObjectValue) {
-                    return null;
+        case (is GQLAbstractObjectType) {
+            try {
+                value subSelectionSet = mergeSelectionSets(fields);
+                value resultObjectValue = executeSelectionSet(subSelectionSet, fieldType, result, variableValues, errors, path, executor, false);
+                if (!inNonNull) {
+                    if (is NullForError resultObjectValue) {
+                        return null;
+                    }
                 }
+                return resultObjectValue;
             }
-            return resultObjectValue;
+            catch (Throwable t) {
+                log.error("error completing object", t);
+                errors.add(FieldError("internal error", path));
+                return (inNonNull) then NullForError();
+            }
         }
         /*
         case (is GQLInterfaceType | GQLUnionType) {
@@ -374,33 +513,6 @@ shared class Schema(query, mutation)
         else {
             throw AssertionError(fieldType.string);
         }
-    }
-
-    Result<Anything>? |NullForError completeValues<Value>(GQLType<Value> fieldType, [Field+] fields, Anything result, variableValues, errors, [String, <String|Integer>*] path, Executor executor)
-        given Value satisfies Result<Anything>
-    {
-        Map<String, Result<Anything>?> variableValues;
-
-        ListMutator<FieldError> errors;
-
-        print("complete ``path``");
-
-        if (is GQLNonNullType<GQLType<Value>, Anything> fieldType) {
-            if (is FieldError result) {
-                return NullForError();
-            }
-
-            value completedResult = innerCompleteValues(fieldType.inner, fields, result, variableValues, true, errors, path, executor);
-            if (is Null completedResult) {
-                value error = FieldNullError(path);
-                errors.add(error);
-                return NullForError();
-            }
-            return completedResult;
-        }
-
-        value completedResult = innerCompleteValues(fieldType, fields, result, variableValues, false, errors, path, executor);
-        return completedResult;
     }
 
     /*
@@ -425,6 +537,15 @@ shared class Schema(query, mutation)
         assert(y.sequence() == x.sequence());
         assert (nonempty yy = y.sequence());
         return yy;
+    }
+
+    class IntrospectionSupport(types, queryType, mutationType, directives)
+    {
+        shared IntrospectionSupport __schema => this;
+        shared {GQLObjectType|GQLEnumType*} types;
+        shared GQLObjectType queryType;
+        shared GQLObjectType? mutationType;
+        shared Empty directives;
     }
 }
 
@@ -457,14 +578,15 @@ Executor normalExecutor = serialExecutor;
 shared interface ExtResult
 {
     shared formal Boolean includedExecution;
-    shared formal GQLObjectValue? data;
+    shared formal Map<String, Anything>? data;
     shared formal List<GQLError>? errors;
 }
 
-shared interface Result<out Value>
+shared class XResult<out Value>(value_)
 {
-    shared formal Value value_;
+    shared Value value_;
 }
+/*
 shared class GQLIntValue(Integer value__)
     satisfies Result<Integer>
 {
@@ -482,6 +604,13 @@ shared class GQLStringValue(shared String value__)
 {
     shared actual String value_=>value__;
 }
+
+shared class GQLBooleanValue(shared Boolean value__)
+    satisfies Result<Boolean>
+{
+    shared actual Boolean value_ => value__;
+}
+
 shared class GQLObjectValue(shared Map<String, Result<Anything>?> value__)
     satisfies Result<Map<String, Result<Anything>?>>
 {
@@ -493,11 +622,12 @@ shared class GQLListValue<out Value>(shared Value?[] elements)
 {
     shared actual Value?[] value_=>elements;
 }
+*/
 class ExtResultImplTODO(includedExecution, data, errors_)
     satisfies ExtResult
 {
     shared actual Boolean includedExecution;
-    shared actual GQLObjectValue? data;
+    shared actual Map<String, Anything>? data;
     List<GQLError> errors_;
     shared actual List<GQLError>? errors = if (errors_.empty) then null else errors_;
 
@@ -518,10 +648,10 @@ class PathComponent()
 shared class VariableCoercionError(shared String variableName)
     extends QueryError()
 {}
-shared class FieldError(path)
+shared class FieldError(message, path)
     extends GQLError()
 {
-    shared String message => "not yet";
+    shared String message;
     shared Null locations = null;
 
     shared [String, <String|Integer>*] path;
@@ -529,30 +659,66 @@ shared class FieldError(path)
     shared String stringPath => "``path.first````"".join(path.rest.map((el)=>if (is String el) then "/``el``" else "[``el.string``]"))``";
 }
 shared class ArgumentCoercionError(path, argumentName)
-    extends FieldError(path)
+    extends FieldError("TODO", path) //TODO
 {
     [String, <String|Integer>*] path;
     shared String argumentName;
 }
 
 shared class ResolvingError(path)
-    extends FieldError(path)
+    extends FieldError("TODO", path)//TODO
 {
     [String, <String|Integer>*] path;
 }
 shared class FieldNullError(path)
-        extends FieldError(path)
+        extends FieldError("TODO", path)//TODO
 {
     [String, <String|Integer>*] path;
 }
 shared class ResolvedNotIterableError(path)
-        extends FieldError(path)
+        extends FieldError("TODO", path)//TODO
 {
     [String, <String|Integer>*] path;
 }
 shared class ListCompletionError(path)
-        extends FieldError(path)
+        extends FieldError("TODO", path)//TODO
 {
     [String, <String|Integer>*] path;
 }
 class NullForError(){}
+
+Anything getDyn(Object obj, String name)
+{
+    // could be moved outside this function and evaluated only once
+    value declGetAttribute = `interface Class`.getMemberDeclaration<FunctionDeclaration>("getAttribute");
+    assert (exists declGetAttribute);
+
+    value t = type(obj);
+    value methodGetAttribute = declGetAttribute.memberApply<Nothing, Attribute<>?, [String]>(type(t), t);
+    value getAttribute = methodGetAttribute.bind(t);
+
+    value attribute = getAttribute(name);
+    if (is Null attribute) {
+        // TODO make configurable: silent null / log message / exception (field error)
+        log.warn("Cannot resolve value: No attribute ``name`` found in object of type ``type(obj)``.");
+        return null;
+    }
+    value val = attribute.bind(obj);
+    value result = val.get();
+    return result;
+}
+
+shared void r()
+{
+    class A()
+    {
+        shared Integer a=5;
+        Integer b=6;
+    }
+    class B() extends A()
+    {
+        shared Float c = 5.4;
+    }
+    value x = getDyn(B(), "c");
+    print(x);
+}

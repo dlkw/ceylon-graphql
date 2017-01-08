@@ -1,26 +1,23 @@
 import ceylon.test {
     test,
     assertEquals,
-    assertTrue,
-    assertNull
+    assertTrue
 }
 
 import de.dlkw.graphql.exp {
-    GQLObjectType,
-    GQLField,
-    GQLIntType,
     Document,
     Schema,
     OperationDefinition,
     Field,
     OperationType,
-    GQLIntValue,
-    ResolvingError,
-    GQLNonNullType,
-    FieldNullError,
-    ArgumentDefinition,
-    undefined,
     Argument
+}
+import de.dlkw.graphql.exp.types {
+    GQLObjectType,
+    GQLField,
+    gqlIntType,
+    undefined,
+    ArgumentDefinition
 }
 
 test
@@ -28,11 +25,11 @@ shared void intArgumentWithIntValue() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f1";
-            type = GQLIntType();
+            type = gqlIntType;
             arguments = map({
-                "arg1"->ArgumentDefinition(GQLIntType(), GQLIntValue(99))
+                "arg1"->ArgumentDefinition(gqlIntType, 99)
             });
-            resolver = (a, e) => e["arg1"]?. value_;
+            resolver = (a, e) => e["arg1"];
         }
     });
 
@@ -44,9 +41,9 @@ shared void intArgumentWithIntValue() {
     assertTrue(result.includedExecution);
 
     assert (exists data = result.data);
-    assertTrue(data.value_.defines("f1"));
-    assert (is GQLIntValue f1 = data.value_["f1"]);
-    assertEquals(f1.value_, 88);
+    assertTrue(data.defines("f1"));
+    assert (is Integer f1 = data["f1"]);
+    assertEquals(f1, 88);
 }
 
 test
@@ -54,11 +51,11 @@ shared void intArgumentWithIntDefault() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f1";
-            type = GQLIntType();
+            type = gqlIntType;
             arguments = map({
-                "arg1"->ArgumentDefinition(GQLIntType(), GQLIntValue(99))
+                "arg1"->ArgumentDefinition(gqlIntType, 99)
             });
-            resolver = (a, e) => e["arg1"]?. value_;
+            resolver = (a, e) => e["arg1"];
         }
     });
 
@@ -70,9 +67,9 @@ shared void intArgumentWithIntDefault() {
     assertTrue(result.includedExecution);
 
     assert (exists data = result.data);
-    assertTrue(data.value_.defines("f1"));
-    assert (is GQLIntValue f1 = data.value_["f1"]);
-    assertEquals(f1.value_, 99);
+    assertTrue(data.defines("f1"));
+    assert (is Integer f1 = data["f1"]);
+    assertEquals(f1, 99);
 }
 
 test
@@ -80,11 +77,11 @@ shared void intArgumentWithNullDefault() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f1";
-            type = GQLIntType();
+            type = gqlIntType;
             arguments = map({
-                "arg1"->ArgumentDefinition(GQLIntType(), null)
+                "arg1"->ArgumentDefinition(gqlIntType, null)
             });
-            resolver = (a, e) => e["arg1"]?. value_;
+            resolver = (a, e) => e["arg1"];
         }
     });
 
@@ -96,8 +93,8 @@ shared void intArgumentWithNullDefault() {
     assertTrue(result.includedExecution);
 
     assert (exists data = result.data);
-    assertTrue(data.value_.defines("f1"));
-    assert (is Null f1 = data.value_["f1"]);
+    assertTrue(data.defines("f1"));
+    assert (is Null f1 = data["f1"]);
 }
 
 test
@@ -105,11 +102,11 @@ shared void intArgumentWithoutDefault() {
     value queryRoot = GQLObjectType("queryRoot", {
         GQLField {
             name = "f1";
-            type = GQLIntType();
+            type = gqlIntType;
             arguments = map({
-                "arg1"->ArgumentDefinition(GQLIntType(), undefined)
+                "arg1"->ArgumentDefinition(gqlIntType, undefined)
             });
-            resolver = (a, e) => e["arg1"]?. value_;
+            resolver = (a, e) => e["arg1"];
         }
     });
 
@@ -121,6 +118,6 @@ shared void intArgumentWithoutDefault() {
     assertTrue(result.includedExecution);
 
     assert (exists data = result.data);
-    assertTrue(data.value_.defines("f1"));
-    assert (is Null f1 = data.value_["f1"]);
+    assertTrue(data.defines("f1"));
+    assert (is Null f1 = data["f1"]);
 }

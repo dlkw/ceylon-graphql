@@ -1,3 +1,10 @@
+import de.dlkw.graphql.exp.types {
+    undefined,
+    Undefined,
+    GQLType,
+    assertGQLName,
+    InputCoercing
+}
 shared class Document(definitions)
 {
     <OperationDefinition | FragmentDefinition>[] definitions;
@@ -32,19 +39,17 @@ shared class OperationDefinition(type, selectionSet, name = null, variableDefini
 {
     shared String? name;
     shared OperationType type;
-    {<String->VariableDefinition<Result<Anything>>>*}? variableDefinitions_;
-    shared Map<String, VariableDefinition<Result<Anything>>> variableDefinitions = if (exists variableDefinitions_) then map(variableDefinitions_) else map([]);
+    {<String->VariableDefinition<Object, String?>>*}? variableDefinitions_;
+    shared Map<String, VariableDefinition<Object, String?>> variableDefinitions = if (exists variableDefinitions_) then map(variableDefinitions_) else map([]);
     shared [Selection+] selectionSet;
 }
 
-shared abstract class Undefined() of undefined
-{}
-shared object undefined extends Undefined(){}
 
-shared class VariableDefinition<Value>(type, defaultValue = undefined)
-    given Value satisfies Result<Anything>
+shared class VariableDefinition<Value, out TypeName>(type, defaultValue = undefined)
+    given Value satisfies Object
+    given TypeName of String | Null
 {
-    shared GQLType<Value> type;
+    shared GQLType<TypeName> & InputCoercing<Object, Nothing> type;
     shared Value?|Undefined defaultValue;
 }
 
