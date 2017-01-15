@@ -12,10 +12,11 @@ import de.dlkw.graphql.exp.types {
     GQLTypeReference,
     resolveAllTypeReferences
 }
+
 object introspection
 {
     GQLObjectType typeEnumValue = GQLObjectType {
-        name = "__EnumValue";
+        name_ = "__EnumValue";
         description = "An Enum value";
         fields_ = {
             GQLField {
@@ -29,6 +30,11 @@ object introspection
             GQLField {
                 name = "isDeprecated";
                 type = GQLNonNullType(gqlBooleanType);
+                Boolean resolver(Anything field, Anything ignored)
+                {
+                    assert (is GQLEnumValue field);
+                    return field.deprecated;
+                }
             },
             GQLField {
                 name = "deprecationReason";
@@ -38,7 +44,7 @@ object introspection
     };
 
     GQLObjectType typeInputValue = GQLObjectType {
-        name = "__InputValue";
+        name_ = "__InputValue";
         description = "An input value...";
         fields_ = {
             GQLField {
@@ -61,7 +67,7 @@ object introspection
     };
 
     GQLObjectType typeField = GQLObjectType {
-        name = "__Field";
+        name_ = "__Field";
         description = "A field...";
         fields_ = {
             GQLField {
@@ -83,6 +89,11 @@ object introspection
             GQLField {
                 name = "isDeprecated";
                 type = GQLNonNullType(gqlBooleanType);
+                Boolean resolver(Anything field, Anything ignored)
+                {
+                    assert (is GQLField<Anything> field);
+                    return field.deprecated;
+                }
             },
             GQLField {
                 name = "deprecationReason";
@@ -92,7 +103,7 @@ object introspection
     };
 
     shared GQLObjectType typeType = GQLObjectType {
-        name = "__Type";
+        name_ = "__Type";
         description = "A type...";
         fields_ = {
             GQLField {
@@ -120,6 +131,17 @@ object introspection
                 name = "fields";
                 type = GQLListType(GQLNonNullType(typeField));
                 arguments = map({ "includeDeprecated"->ArgumentDefinition(gqlBooleanType, false) });
+                {GQLField<Anything>*}? resolver(Anything objectType, Map<String, Anything> args)
+                {
+                    if (is GQLObjectType objectType) {
+                        assert (is Boolean includeDeprecated = args["includeDeprecated"]);
+                        if (includeDeprecated) {
+                            return objectType.fields.items;
+                        }
+                        return objectType.fields.items.filter((field) => !field.deprecated);
+                    }
+                    return null;
+                }
             },
             GQLField {
                 name = "interfaces";
@@ -133,6 +155,17 @@ object introspection
                 name = "enumValues";
                 type = GQLListType(GQLNonNullType(typeEnumValue));
                 arguments = map({ "includeDeprecated"->ArgumentDefinition(gqlBooleanType, false) });
+                {GQLEnumValue*}? resolver(Anything enumType, Map<String, Anything> args)
+                {
+                    if (is GQLEnumType enumType) {
+                        assert (is Boolean includeDeprecated = args["includeDeprecated"]);
+                        if (includeDeprecated) {
+                            return enumType.enumValues;
+                        }
+                        return enumType.enumValues.filter((v) => !v.deprecated);
+                    }
+                    return null;
+                }
             },
             GQLField {
                 name = "inputValues";
@@ -146,7 +179,7 @@ object introspection
     };
 
     GQLObjectType typeDirective = GQLObjectType {
-        name = "__Directive";
+        name_ = "__Directive";
         description = "A directive...";
         fields_ = {
             GQLField {
@@ -176,7 +209,7 @@ object introspection
     };
 
     shared GQLObjectType typeSchema = GQLObjectType {
-        name = "__Schema";
+        name_ = "__Schema";
         description = "The schema...";
         fields_ = {
             GQLField {
@@ -200,9 +233,3 @@ object introspection
 
     resolveAllTypeReferences(typeSchema, map({ typeType.name->typeType }));
 }
-
-/*
-
-
-
- */

@@ -31,7 +31,11 @@ import de.dlkw.graphql.exp.types {
     GQLEnumType,
     GQLEnumValue,
     GQLField,
-    GQLObjectType
+    GQLObjectType,
+    ArgumentDefinition,
+    GQLInpNonNullType,
+    GQLInputObjectType,
+    GQLInputField
 }
 
 JsonObject exe(Document doc, Schema schema, Anything rootValue)
@@ -98,9 +102,30 @@ shared void run()
     variable Integer aa = 0;
     value queryRoot = GQLObjectType("n", {
         GQLField{
+            "obj";
+            GQLObjectType("A", {
+                GQLField("of1s1", gqlIntType)
+            });
+            arguments = map({
+                "inpObj" -> ArgumentDefinition(GQLInpNonNullType<GQLInputObjectType, Map<String, Anything>, Map<String, Anything>>(GQLInputObjectType(
+                    "of1",
+                    null,
+                    {
+                        GQLInputField("of1s1", gqlIntType, null)
+                    }
+                )))
+            });
+            resolver = (Anything x, Map<String, Anything> y)
+            {
+                return y["inpObj"];
+            };
+        },
+        GQLField{
             "fA";
             gqlIntType;
             "descA";
+            deprecated=true;
+            deprecationReason="mmmmmmmm";
         },
         GQLField{
             name="fB";
@@ -143,7 +168,7 @@ shared void run()
             description="descB";
         },
         GQLField("nicks", GQLNonNullType(GQLListType(GQLNonNullType(GQLObjectType{
-            name="kk";
+            name_="kk";
             fields_={GQLField{
                 name="n1";
                 type=GQLNonNullType(gqlIntType);
@@ -163,12 +188,66 @@ shared void run()
 
     value schema = Schema(queryRoot, null);
     //value doc = doci();
-    value doc = intro();
+    value doc = inputTest();
 
     value rv = map({"fA"->5, "fC"->map({"sub1"->19, "sub2"->map({"subsub21"->6, "subsub22"->16})}), "nicks"->[map({"n1"->1}), map({"n1"->424}), map({"n1"-> 3})], "enum"->"5"});
     print(exe(doc, schema, rv));
 }
-Document intro()
+Document inputTest()
+{
+    return Document([
+        OperationDefinition(OperationType.query, [
+            Field{"obj";
+                arguments_=[
+                    Argument("inpObj", map({"of1s1"->5}))//, "b"->"BBB", "c"->true}))
+//                    Argument("inpObj", "k")
+                ];
+                selectionSet = [
+                    Field("of1s1")
+                ];
+            }
+        ])
+    ]);
+}
+Document introType()
+{
+    return Document([
+        OperationDefinition(OperationType.query, [
+            Field{"__type";
+                alias_="t1";
+                arguments_=[
+                    Argument("name", "Enum1")
+                ];
+                selectionSet = [
+                    Field("kind"),
+                    Field("name")
+                ];
+            },
+            Field{"__type";
+                alias_="t2";
+                arguments_=[
+                    Argument("name", "n")
+                ];
+                selectionSet = [
+                    Field("kind"),
+                    Field("name"),
+                    Field("kind", "k")
+                ];
+            },
+            Field{"__type";
+                alias_="t2";
+                arguments_=[
+                    Argument("name", "n")
+                ];
+                selectionSet = [
+                    Field("description"),
+                    Field("name")
+                ];
+            }
+        ])
+    ]);
+}
+Document introSchema()
 {
     return Document([
         OperationDefinition(OperationType.query, [
@@ -202,7 +281,7 @@ Document intro()
                             Field{"possibleTypes";selectionSet=[
                                 Field("name")
                             ];},
-                            Field("enumValues", null, [Argument("includeDeprecated", true)], null, [
+                            Field("enumValues", null, [Argument("includeDeprecated", false)], null, [
                                 Field("name"),
                                 Field("description"),
                                 Field("isDeprecated"),

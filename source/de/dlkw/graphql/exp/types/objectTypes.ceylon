@@ -7,30 +7,32 @@ import ceylon.collection {
     SetMutator
 }
 shared abstract class GQLAbstractObjectType(name, description)
-    extends GQLNullableType<String>(TypeKind.\iobject, name, description)
+    extends GQLNullableType(TypeKind.\iobject, name, description)
 {
     String name;
     String? description;
-    shared formal Map<String, GQLField<Anything, String?>> fields;
+    shared formal Map<String, GQLField<Anything>> fields;
 }
 
-shared class GQLObjectType(name, {GQLField<Anything, String?>+} fields_, description=null)
-    extends GQLAbstractObjectType(name, description)
+shared class GQLObjectType(name_, {GQLField<Anything>+} fields_, description=null)
+    extends GQLAbstractObjectType(name_, description)
 {
-    String name;
+    String name_;
     String? description;
 
-    shared actual Map<String, GQLField<Anything, String?>> fields = map(fields_.map((field) => field.name -> field));
+    shared actual String name => name_;
+
+    shared actual Map<String, GQLField<Anything>> fields = map(fields_.map((field) => field.name -> field));
 }
 
-shared class GQLField<out Value, out TypeName>(name, type, description=null, arguments=emptyMap, deprecated=false, resolver=null)
-    given TypeName of String | Null
+shared class GQLField<out Value>(name, type, description=null, arguments=emptyMap, deprecated=false, deprecationReason=null, resolver=null)
 {
     shared String name;
-    shared GQLType<TypeName> type;
+    shared GQLType type;
     shared String? description;
     shared Boolean deprecated;
-    shared Map<String, ArgumentDefinition<Object, String?>> arguments;
+    shared String? deprecationReason;
+    shared Map<String, ArgumentDefinition<Object>> arguments;
     "Optional resolver for a field in an object. First parameter is the object value of the object
      containing the field to resolve, second the field's argument values"
     shared Anything(Anything, Map<String, Anything>)? resolver;
@@ -38,17 +40,13 @@ shared class GQLField<out Value, out TypeName>(name, type, description=null, arg
     assertGQLName(name);
 
     "Alias for [[arguments]] to provide the key/value pair in the GraphQL introspection type."
-    shared Map<String, ArgumentDefinition<Object, String?>> args => arguments;
-
-    "Alias for [[deprecated]] to provide the key/value pair in the GraphQL introspection type."
-    shared Boolean isDeprecated => deprecated;
+    shared Map<String, ArgumentDefinition<Object>> args => arguments;
 }
 
-shared class ArgumentDefinition<out Value, out TypeName>(type, defaultValue=undefined)
+shared class ArgumentDefinition<out Value>(type, defaultValue=undefined)
     given Value satisfies Object
-    given TypeName of String | Null
 {
-    shared GQLType<TypeName> & InputCoercing<Value, Nothing> type;
+    shared <GQLType & InputCoercing<Value, Nothing>> type;
 
     "The default value used if no value is specified in the graphQL document.
      May be null if null is the default value. If no default value is intended,
@@ -59,9 +57,11 @@ shared class ArgumentDefinition<out Value, out TypeName>(type, defaultValue=unde
 shared abstract class Undefined() of undefined {}
 shared object undefined extends Undefined() {}
 
-shared class GQLTypeReference(String name)
-        extends GQLAbstractObjectType(name, null)
+shared class GQLTypeReference(String name_)
+        extends GQLAbstractObjectType(name_, null)
 {
+    shared actual String name => name_;
+
     variable GQLObjectType? holder = null;
 
     shared GQLObjectType referenced
@@ -82,7 +82,7 @@ shared class GQLTypeReference(String name)
 
     description => referenced.description;
 
-    shared actual Map<String,GQLField<Anything, String?>> fields => referenced.fields;
+    shared actual Map<String,GQLField<Anything>> fields => referenced.fields;
 }
 
 void resolveTypeReference(GQLTypeReference typeReference, Map<String, GQLObjectType> referenceableTypes)
@@ -99,12 +99,12 @@ void resolveTypeReference(GQLTypeReference typeReference, Map<String, GQLObjectT
 
 void recurseToResolveTypeReference(type, referenceableTypes, startedResolvingTypes)
 {
-    GQLType<> type;
+    GQLType type;
     Map<String, GQLObjectType> referenceableTypes;
     SetMutator<GQLObjectType> startedResolvingTypes;
 
     switch (type)
-    case (is GQLListType<GQLType<>> | GQLNonNullType<GQLType<>>) {
+    case (is GQLListType<GQLType> | GQLNonNullType<GQLType>) {
         value inner = type.inner;
         recurseToResolveTypeReference(inner, referenceableTypes, startedResolvingTypes);
     }

@@ -35,7 +35,13 @@ import de.dlkw.graphql.exp.types {
     GQLAbstractObjectType,
     GQLScalarType,
     GQLTypeReference,
-    resolveAllTypeReferences
+    resolveAllTypeReferences,
+    undefined,
+    gqlStringType,
+    ArgumentDefinition,
+    gqlBooleanType,
+    InputCoercing,
+    GQLInpNonNullType
 }
 
 Logger log = logger(`module`);
@@ -45,13 +51,28 @@ shared class Schema(query_, mutation)
     GQLObjectType query_;
     shared GQLObjectType? mutation;
 
-    value introspectionSchemaField = GQLField{
-        name="__schema";
-        type=introspection.typeSchema;
+
+    GQLField<Nothing> introspectionFieldSchema = GQLField {
+        name = "__schema";
+        type = introspection.typeSchema;
+    };
+
+    GQLField<Nothing> introspectionFieldType = GQLField {
+        name = "__type";
+        type = introspection.typeType;
+        arguments = map({ "name"->ArgumentDefinition<String>(GQLInpNonNullType<InputCoercing<String, String>, String, String>(gqlStringType), undefined)});
+        GQLType? resolver(Anything introspectionSupport, Map<String, Anything> arguments)
+        {
+            assert (is IntrospectionSupport introspectionSupport);
+
+            assert (is String name = arguments["name"]);
+            return introspectionSupport.types.find((t) =>
+            t.name?.equals(name) else false);
+        }
     };
 
     class GQLObjectTypeWrapper(GQLObjectType wrapped)
-            extends GQLObjectType(wrapped.name, wrapped.fields.items.chain([introspectionSchemaField]), wrapped.description)
+            extends GQLObjectType(wrapped.name, wrapped.fields.items.chain({introspectionFieldSchema, introspectionFieldType}), wrapped.description)
     {
     }
     shared GQLObjectType query = GQLObjectTypeWrapper(query_);
@@ -65,19 +86,20 @@ shared class Schema(query_, mutation)
 
     void internalRegisterType(GQLObjectType | GQLEnumType type)
     {
-        log.info("registering type ``type.name``");
-        if (type.name.startsWith("__")) {
+        assert (exists tName = type.name); // FIXME should be necessary
+        log.info("registering type ``tName``");
+        if (tName.startsWith("__")) {
             throw; // TODO
         }
 
-        value registeredType = types[type.name];
+        value registeredType = types[tName];
         if (exists registeredType) {
             if (!type === registeredType) {
                 throw ; // TODO
             }
         }
         else {
-            types.put(type.name, type);
+            types.put(tName, type);
         }
 
         if (is GQLObjectType type) {
@@ -91,12 +113,24 @@ shared class Schema(query_, mutation)
 
     internalRegisterType(query_);
 
-    //    for (t in introspection.introspectionType.fields.items.map(
-//        (f)=>f.type)
-//        .narrow<GQLTypeReference>())
-//    {
-//        resolveTypeReference(t);
-//    }
+    {Element+} mkExistingFirst<Element>({Element*} elements)
+    {
+        return object satisfies {Element+}
+        {
+            iterator() => object satisfies Iterator<Element>
+            {
+                value internal = elements.iterator();
+                next() => internal.next();
+            };
+        };
+/*        Iterator<Element> iterator = elements.iterator();
+        return {
+            if (!is Finished nx = iterator.next()) then nx else nothing,
+            for (el in RestIterable(iterator)) el };
+*/    }
+
+    {GQLType+} registeredTypes = mkExistingFirst(types.items);
+    print(registeredTypes);
 
     shared void registerType(GQLObjectType | GQLEnumType type)
     {
@@ -163,7 +197,7 @@ shared class Schema(query_, mutation)
         for (variableName->variableDefinition in operationDefinition.variableDefinitions) {
             if (variableValues.defines(variableName)) {
                 value value_ = variableValues[variableName];
-                value providedValue = variableDefinition.type.dCI(value_);
+                value providedValue = variableDefinition.type.ddCI(value_);
                 if (is CoercionError providedValue) {
                     errors.add(VariableCoercionError(variableName));
                     hasErrors = true;
@@ -174,7 +208,7 @@ shared class Schema(query_, mutation)
             else {
                 value defaultValue = variableDefinition.defaultValue;
                 if (is Undefined defaultValue) {
-                    if (is GQLNonNullType<GQLType<>> variableType = variableDefinition.type) {
+                    if (is GQLNonNullType<GQLType> variableType = variableDefinition.type) {
                         errors.add(VariableCoercionError(variableName));
                         hasErrors = true;
                         continue;
@@ -210,7 +244,7 @@ shared class Schema(query_, mutation)
         for (argumentName->argumentDefinition in fieldType.arguments) {
             if (field.arguments.defines(argumentName)) {
                 value value_ = field.arguments[argumentName];
-                value providedValue = argumentDefinition.type.dCI(value_);
+                value providedValue = argumentDefinition.type.ddCI(value_);
                 if (is CoercionError providedValue) {
                     errors.add(ArgumentCoercionError(path, argumentName));
                     hasErrors = true;
@@ -221,7 +255,7 @@ shared class Schema(query_, mutation)
             else {
                 value defaultValue = argumentDefinition.defaultValue;
                 if (is Undefined defaultValue) {
-                    if (is GQLNonNullType<GQLType<>> argumentType = argumentDefinition.type) {
+                    if (is GQLNonNullType<GQLType> argumentType = argumentDefinition.type) {
                         errors.add(ArgumentCoercionError(path, argumentName));
                         hasErrors = true;
                         continue;
@@ -252,7 +286,7 @@ shared class Schema(query_, mutation)
 
         Boolean topLevel;
 
-        log.debug("execute selection set ``executedPath else "null"``");
+        log.debug("execute selection set of object ``executedPath else "null"``");
 
         value groupedFieldSet = collectFields(objectType, selectionSet, variableValues);
 
@@ -275,8 +309,8 @@ shared class Schema(query_, mutation)
                 continue;
             }
 
-            if (topLevel && fieldName == "__schema") {
-                usedObjectValue = IntrospectionSupport(types.items, query, mutation, []);
+            if (topLevel && (fieldName == "__schema" || fieldName == "__type")) {
+                usedObjectValue = IntrospectionSupport(registeredTypes, query, mutation, []);
             }
             else {
                 usedObjectValue = objectValue;
@@ -336,7 +370,7 @@ shared class Schema(query_, mutation)
     {
         GQLAbstractObjectType objectType;
         Anything objectValue;
-        GQLType<> fieldType;
+        GQLType fieldType;
         [Field+] fields;
         Map<String, Anything> variableValues;
 
@@ -400,7 +434,7 @@ shared class Schema(query_, mutation)
 
     Anything | NullForError completeValues(fieldType, fields, result, variableValues, errors, path, executor)
     {
-        GQLType<> fieldType;
+        GQLType fieldType;
         [Field+] fields;
         Anything result;
         Map<String, Anything> variableValues;
@@ -412,7 +446,7 @@ shared class Schema(query_, mutation)
 
         log.debug("complete ``path``");
 
-        if (is GQLNonNullType<GQLType<>> fieldType) {
+        if (is GQLNonNullType<GQLType> fieldType) {
             if (is FieldError result) {
                 return NullForError();
             }
@@ -433,7 +467,7 @@ shared class Schema(query_, mutation)
 
     Anything | NullForError innerCompleteValues(fieldType, fields, result, variableValues, inNonNull, errors, path, executor)
     {
-        GQLType<> fieldType;
+        GQLType fieldType;
         [Field+] fields;
         Anything result;
         Map<String, Anything> variableValues;
@@ -452,7 +486,7 @@ shared class Schema(query_, mutation)
         }
 
         switch (fieldType)
-        case (is GQLListType<GQLType<>>) {
+        case (is GQLListType<GQLType>) {
             if (!is Iterable<Anything> result) {
                 errors.add(ResolvedNotIterableError(path));
                 return (inNonNull) then NullForError();
@@ -484,7 +518,7 @@ shared class Schema(query_, mutation)
             }
             return elementResults.sequence();
         }
-        case (is GQLScalarType<Anything> | GQLEnumType) {
+        case (is GQLScalarType<Anything, Nothing> | GQLEnumType) {
             return fieldType.coerceResult(result);
         }
         case (is GQLAbstractObjectType) {
@@ -542,7 +576,7 @@ shared class Schema(query_, mutation)
     class IntrospectionSupport(types, queryType, mutationType, directives)
     {
         shared IntrospectionSupport __schema => this;
-        shared {GQLObjectType|GQLEnumType*} types;
+        shared {GQLType+} types;
         shared GQLObjectType queryType;
         shared GQLObjectType? mutationType;
         shared Empty directives;
@@ -659,33 +693,43 @@ shared class FieldError(message, path)
     shared String stringPath => "``path.first````"".join(path.rest.map((el)=>if (is String el) then "/``el``" else "[``el.string``]"))``";
 }
 shared class ArgumentCoercionError(path, argumentName)
-    extends FieldError("TODO", path) //TODO
+    extends FieldError("argument coercion", path) //TODO
 {
     [String, <String|Integer>*] path;
     shared String argumentName;
 }
 
 shared class ResolvingError(path)
-    extends FieldError("TODO", path)//TODO
+    extends FieldError("resolving", path)//TODO
 {
     [String, <String|Integer>*] path;
 }
 shared class FieldNullError(path)
-        extends FieldError("TODO", path)//TODO
+        extends FieldError("null", path)//TODO
 {
     [String, <String|Integer>*] path;
 }
 shared class ResolvedNotIterableError(path)
-        extends FieldError("TODO", path)//TODO
+        extends FieldError("not iterable", path)//TODO
 {
     [String, <String|Integer>*] path;
 }
 shared class ListCompletionError(path)
-        extends FieldError("TODO", path)//TODO
+        extends FieldError("complete list", path)//TODO
 {
     [String, <String|Integer>*] path;
 }
 class NullForError(){}
+
+class RestIterable<Element>(Iterator<Element> startedIterator)
+        satisfies {Element*}
+{
+    iterator() => object satisfies Iterator<Element>
+    {
+        next() => startedIterator.next();
+    };
+}
+
 
 Anything getDyn(Object obj, String name)
 {

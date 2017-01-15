@@ -8,27 +8,21 @@ import ceylon.time.iso8601 {
     parseZoneDateTime
 }
 shared object gqlInstantType
-    extends GQLScalarType<String, Instant, Object>("Instant",
+    extends GQLScalarType<String, Instant, Instant, String>("Instant",
         "An instant in time, or timestamp, in
          ISO 8601 format (extended format) with
          a time zone designator Z (UTC time zone)")
 {
-    shared actual String | CoercionError coerceResult(Object result)
+    shared actual String | CoercionError doCoerceResult(Instant result)
     {
-        if (is Instant result) {
-            return result.string;
-        }
-        return CoercionError("not an Instant: ``result`` (of type ``type(result)``)");
+        return result.string;
     }
 
-    shared actual Instant | CoercionError coerceInput(Object input)
+    shared actual Instant | CoercionError doCoerceInput(String input)
     {
-        if (is String input) {
-            if (exists instant = parseZoneDateTime(input) ?. instant) {
-                return instant;
-            }
-            return CoercionError("not a valid Instant string value: ``input``");
+        if (exists instant = parseZoneDateTime(input) ?. instant) {
+            return instant;
         }
-        return CoercionError("not an Integer: ``input`` (of type ``type(input)``)");
+        return CoercionError("not a valid Instant string value: ``input``");
     }
 }

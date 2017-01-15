@@ -1,24 +1,22 @@
-shared abstract class GQLScalarType<out External, out Internal = External, in Input = Nothing>(String name, String? description = null)
-    extends GQLNullableType<String>(TypeKind.scalar, name, description)
-    satisfies ResultCoercing<External> & InputCoercing<Internal, Input>
+shared abstract class GQLScalarType<out External, in ExternalInput, out Internal = External, in Input = Nothing>(String name, String? description = null)
+    extends GQLNullableType(TypeKind.scalar, name, description)
+    satisfies ResultCoercing<External, ExternalInput> & InputCoercing<Internal, Input>
     given External satisfies Object
     given Internal satisfies Object
     given Input satisfies Object
+    given ExternalInput satisfies Object
 {
 }
 
 shared object gqlIntType
-    extends GQLScalarType<Integer, Integer, Integer>("Int")
+    extends GQLScalarType<Integer, Integer, Integer, Integer>("Int")
 {
-    shared actual Integer | CoercionError coerceResult(Object result)
+    shared actual Integer | CoercionError doCoerceResult(Integer result)
     {
-        if (is Integer result) {
-            return coerceInput(result);
-        }
-        throw;//FIXME
+        return doCoerceInput(result);
     }
 
-    shared actual Integer | CoercionError coerceInput(Integer input)
+    shared actual Integer | CoercionError doCoerceInput(Integer input)
     {
         if (input >= 2 ^ 31) {
             return CoercionError("could not coerce positive Integer to 32 bit");
@@ -31,17 +29,14 @@ shared object gqlIntType
 }
 
 shared object gqlFloatType
-    extends GQLScalarType<Float, Float, Float | Integer>("Float")
+    extends GQLScalarType<Float, Float | Integer, Float, Float | Integer>("Float")
 {
-    shared actual Float | CoercionError coerceResult(Object result)
+    shared actual Float | CoercionError doCoerceResult(Float | Integer result)
     {
-        if (is Float | Integer result) {
-            return coerceInput(result);
-        }
-        throw;//FIXME
+        return doCoerceInput(result);
     }
 
-    shared actual Float | CoercionError coerceInput(Float | Integer input)
+    shared actual Float | CoercionError doCoerceInput(Float | Integer input)
     {
         switch (input)
         case (is Float) {
@@ -55,37 +50,31 @@ shared object gqlFloatType
 }
 
 shared object gqlStringType
-    extends GQLScalarType<String, String, String>("String")
+    extends GQLScalarType<String, String, String, String>("String")
 {
-    shared actual String | CoercionError coerceResult(Object result)
+    shared actual String | CoercionError doCoerceResult(String result)
     {
-        if (is String result) {
-            return coerceInput(result);
-        }
-    throw;//FIXME
-}
+        return doCoerceInput(result);
+    }
 
-    shared actual String | CoercionError coerceInput(String input) => input;
+    shared actual String | CoercionError doCoerceInput(String input) => input;
 }
 
 shared object gqlBooleanType
-    extends GQLScalarType<Boolean, Boolean, Boolean>("Boolean")
+    extends GQLScalarType<Boolean, Boolean, Boolean, Boolean>("Boolean")
 {
-    shared actual Boolean | CoercionError coerceResult(Object result)
+    shared actual Boolean | CoercionError doCoerceResult(Boolean result)
     {
-        if (is Boolean result) {
-            return coerceInput(result);
-        }
-        throw;//FIXME
+        return doCoerceInput(result);
     }
 
-    shared actual Boolean | CoercionError coerceInput(Boolean input) => input;
+    shared actual Boolean | CoercionError doCoerceInput(Boolean input) => input;
 }
 
-shared class GQLIdType<Value>(coerceResult, coerceInput)
-    extends GQLScalarType<Value, Value, Object>("ID")
+shared class GQLIdType<Value>(doCoerceResult, doCoerceInput)
+    extends GQLScalarType<Value, Object, Value, Object>("ID")
     given Value satisfies Object
 {
-    shared actual Value | CoercionError coerceResult(Object result);
-    shared actual Value | CoercionError coerceInput(Object input);
+    shared actual Value | CoercionError doCoerceResult(Object result);
+    shared actual Value | CoercionError doCoerceInput(Object input);
 }

@@ -16,20 +16,6 @@ class GQLUnionType<Value>({GQLObjectType+} types)
 }
 */
 
-/*
-class GQLInputField(name, type, description)
-{
-    shared String name;
-    shared GQLScalarType<Anything> | GQLEnumType | GQLInputObjectType type;
-    shared String? description;
-}
-
-class GQLInputObjectType({GQLInputField+} fields)
-{
-    shared Map<String, GQLInputField> ffields = map(fields.map((field)=>field.name->field));
-}
-*/
-
 shared class GQLError(){}
 shared class QueryError()
     extends GQLError()

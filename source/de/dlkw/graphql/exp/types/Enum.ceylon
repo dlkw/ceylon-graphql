@@ -1,12 +1,13 @@
-shared class GQLEnumType(name, values, description = null)
-    extends GQLNullableType<String>(TypeKind.enum, name, description)
-    satisfies ResultCoercing<String> & InputCoercing<String, Object>
+shared class GQLEnumType(name_, values, description = null)
+    extends GQLNullableType(TypeKind.enum, name_, description)
+    satisfies ResultCoercing<String, Object> & InputCoercing<String, Object>
 {
-    String name;
+    String name_;
     String? description;
     {GQLEnumValue+} values;
 
-    shared actual String | CoercionError coerceResult(Object value_)
+    shared actual String name => name_;
+    shared actual String | CoercionError doCoerceResult(Object value_)
     {
         print(value_);
         value r = values.find((el){print("scan ``el``, ``el.value_``");return el.value_ == value_;});
@@ -17,7 +18,7 @@ shared class GQLEnumType(name, values, description = null)
     }
 
     // TODO support variable parsing as tokens instead of strings
-    shared actual String coerceInput(Object input) => nothing;
+    shared actual String doCoerceInput(Object input) => nothing;
 
     "Alias for [[values]] to provide the key/value pair in the GraphQL introspection type."
     shared {GQLEnumValue+} enumValues => values;
@@ -40,7 +41,4 @@ shared class GQLEnumValue(name, value__ =null, description=null, deprecated=fals
     if (!deprecated) {
         assert (is Null deprecationReason);
     }
-
-    "Alias for [[deprecated]] to provide the key/value pair in the GraphQL introspection type."
-    shared Boolean isDeprecated => deprecated;
 }

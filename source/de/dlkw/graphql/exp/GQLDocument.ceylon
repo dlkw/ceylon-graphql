@@ -49,7 +49,7 @@ shared class VariableDefinition<Value, out TypeName>(type, defaultValue = undefi
     given Value satisfies Object
     given TypeName of String | Null
 {
-    shared GQLType<TypeName> & InputCoercing<Object, Nothing> type;
+    shared GQLType & InputCoercing<Object, Nothing> type;
     shared Value?|Undefined defaultValue;
 }
 
@@ -86,7 +86,7 @@ shared class Argument(name, value_)
     shared String name;
     assertGQLName(name);
 
-    shared DocumentScalarValue value_;
+    shared DocumentScalarValue | Map<String, Anything> value_;
 }
 
 shared class Directive()
