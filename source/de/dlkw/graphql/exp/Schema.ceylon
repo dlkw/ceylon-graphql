@@ -41,10 +41,15 @@ import de.dlkw.graphql.exp.types {
     ArgumentDefinition,
     gqlBooleanType,
     InputCoercing,
-    GQLInpNonNullType
+    GQLInpNonNullType,
+    GQLNullableType,
+    GQLInterfaceType,
+    GQLUnionType,
+    TypeResolver,
+    GQLAbstractType
 }
 
-Logger log = logger(`module`);
+Logger log = logger(`package`);
 
 shared class Schema(query_, mutation)
 {
@@ -60,7 +65,7 @@ shared class Schema(query_, mutation)
     GQLField<Nothing> introspectionFieldType = GQLField {
         name = "__type";
         type = introspection.typeType;
-        arguments = map({ "name"->ArgumentDefinition<String>(GQLInpNonNullType<InputCoercing<String, String>, String, String>(gqlStringType), undefined)});
+        arguments = map({ "name"->ArgumentDefinition<String>(GQLInpNonNullType<GQLNullableType&InputCoercing<String, String>, String, String>(gqlStringType), undefined)});
         GQLType? resolver(Anything introspectionSupport, Map<String, Anything> arguments)
         {
             assert (is IntrospectionSupport introspectionSupport);
@@ -70,9 +75,14 @@ shared class Schema(query_, mutation)
             t.name?.equals(name) else false);
         }
     };
+    Map<String, TypeResolver> typeResolvers = emptyMap;
+    TypeResolver unspecificTypeResolver = object satisfies TypeResolver{
+        shared actual GQLType resolveAbstractType(GQLAbstractType abstractType, Object objectValue) => nothing;
+
+    };
 
     class GQLObjectTypeWrapper(GQLObjectType wrapped)
-            extends GQLObjectType(wrapped.name, wrapped.fields.items.chain({introspectionFieldSchema, introspectionFieldType}), wrapped.description)
+    extends GQLObjectType(wrapped.name, wrapped.fields.items.chain({introspectionFieldSchema, introspectionFieldType}), {}, wrapped.description)
     {
     }
     shared GQLObjectType query = GQLObjectTypeWrapper(query_);
@@ -521,10 +531,17 @@ shared class Schema(query_, mutation)
         case (is GQLScalarType<Anything, Nothing> | GQLEnumType) {
             return fieldType.coerceResult(result);
         }
-        case (is GQLAbstractObjectType) {
+        case (is GQLAbstractObjectType | GQLInterfaceType | GQLUnionType) {
+            GQLAbstractObjectType objectType;
+            if (is GQLAbstractObjectType fieldType) {
+                objectType = fieldType;
+            }
+            else {
+                objectType = resolveAbstractType(fieldType, result);
+            }
             try {
                 value subSelectionSet = mergeSelectionSets(fields);
-                value resultObjectValue = executeSelectionSet(subSelectionSet, fieldType, result, variableValues, errors, path, executor, false);
+                value resultObjectValue = executeSelectionSet(subSelectionSet, objectType, result, variableValues, errors, path, executor, false);
                 if (!inNonNull) {
                     if (is NullForError resultObjectValue) {
                         return null;
@@ -547,6 +564,36 @@ shared class Schema(query_, mutation)
         else {
             throw AssertionError(fieldType.string);
         }
+    }
+
+    GQLObjectType resolveAbstractType(GQLAbstractType abstractType, Object objectValue)
+    {
+        GQLType? resolvedType;
+        if (exists typeResolver = typeResolvers[abstractType.name]) {
+            resolvedType = typeResolver.resolveAbstractType(abstractType, objectValue);
+        }
+        else {
+            resolvedType = unspecificTypeResolver.resolveAbstractType(abstractType, objectValue);
+        }
+
+        if (is Null resolvedType) {
+            throw AssertionError("could not determine concrete type for ``objectValue`` as ``""/*abstractType.kind*/ `` ``abstractType.name``"); // TODO
+        }
+
+        if (!is GQLObjectType resolvedType) {
+            throw; // TODO
+        }
+        if (is GQLInterfaceType abstractType) {
+            if (!resolvedType.interfaces.contains(abstractType)) {
+                throw AssertionError("type ``resolvedType.name`` does not implement interface ``abstractType.name``"); // TODO
+            }
+        }
+        else {
+            if (abstractType.types.contains(resolvedType)) {
+                throw AssertionError("type ``resolvedType.name`` does not occur in union ``abstractType.name``"); // TODO
+            }
+        }
+        return resolvedType;
     }
 
     /*

@@ -6,6 +6,8 @@ shared abstract class GQLScalarType<out External, in ExternalInput, out Internal
     given Input satisfies Object
     given ExternalInput satisfies Object
 {
+    shared actual Boolean isSameTypeAs(GQLType other) => this === other;
+    shared actual String wrappedName => name;
 }
 
 shared object gqlIntType

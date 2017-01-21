@@ -6,6 +6,13 @@ import ceylon.collection {
     HashSet,
     SetMutator
 }
+import ceylon.logging {
+    Logger,
+    logger
+}
+
+Logger log = logger(`package`);
+
 shared abstract class GQLAbstractObjectType(name, description)
     extends GQLNullableType(TypeKind.\iobject, name, description)
 {
@@ -14,7 +21,7 @@ shared abstract class GQLAbstractObjectType(name, description)
     shared formal Map<String, GQLField<Anything>> fields;
 }
 
-shared class GQLObjectType(name_, {GQLField<Anything>+} fields_, description=null)
+shared class GQLObjectType(name_, {GQLField<Anything>+} fields_, shared {GQLInterfaceType*} interfaces={}, description=null)
     extends GQLAbstractObjectType(name_, description)
 {
     String name_;
@@ -22,7 +29,27 @@ shared class GQLObjectType(name_, {GQLField<Anything>+} fields_, description=nul
 
     shared actual String name => name_;
 
-    shared actual Map<String, GQLField<Anything>> fields = map(fields_.map((field) => field.name -> field));
+    shared actual Map<String, GQLField<Anything>> fields = map(fields_.map((field) => field.name -> field), duplicateDetector);
+
+    value message = StringBuilder();
+    for (iface in interfaces) {
+        for (ifield in iface.fields.items) {
+            value field = fields[ifield.name];
+            if (is Null field) {
+                message.appendNewline().append("object type ``name`` does not implement field ``ifield.name`` of interface ``iface.name``");
+            }
+            else if (!field.type.isSameTypeAs(ifield.type)) {
+                message.appendNewline().append("field ``field.name`` of object type ``name`` has type ``field.type.wrappedName`` which does not match type ``ifield.type.wrappedName`` from implemented type ``iface.name``");
+            }
+        }
+    }
+    if (!message.empty) {
+        throw AssertionError("not implementing interfaces:``message``");
+    }
+    shared actual Boolean isSameTypeAs(GQLType other) => this === other;
+
+    shared actual String wrappedName => name_;
+
 }
 
 shared class GQLField<out Value>(name, type, description=null, arguments=emptyMap, deprecated=false, deprecationReason=null, resolver=null)
@@ -83,6 +110,11 @@ shared class GQLTypeReference(String name_)
     description => referenced.description;
 
     shared actual Map<String,GQLField<Anything>> fields => referenced.fields;
+
+    // what to do here?
+    shared actual Boolean isSameTypeAs(GQLType other) => nothing;
+    shared actual String wrappedName => nothing;
+
 }
 
 void resolveTypeReference(GQLTypeReference typeReference, Map<String, GQLObjectType> referenceableTypes)
@@ -129,3 +161,46 @@ shared void resolveAllTypeReferences(GQLObjectType type, Map<String, GQLObjectTy
     recurseToResolveTypeReference(type, referenceableTypes, startedResolvingTypes);
 }
 
+
+shared interface GQLAbstractType of GQLInterfaceType | GQLUnionType
+    satisfies Named
+{
+    shared formal actual String name;
+}
+shared class GQLInterfaceType(String name_, fields_, String? description=null)
+extends GQLNullableType(TypeKind.\iinterface, name_, description)
+    satisfies GQLAbstractType
+{
+    shared actual String name => name_;
+    {GQLField<Anything>+} fields_;
+    for (field in fields_) {
+        if (exists r = field.resolver) {
+            log.warn("field ``field.name`` of interface ``name_`` has a resolver defined, which will never be used");
+        }
+    }
+    shared Map<String, GQLField<Anything>> fields = map(fields_.map((f) => f.name->f), duplicateDetector);
+    shared actual Boolean isSameTypeAs(GQLType other) => this === other;
+
+    shared actual String wrappedName => name_;
+}
+
+shared class GQLUnionType(String name_, shared {GQLObjectType+} types, String? description= null)
+extends GQLNullableType(TypeKind.union, name_, description)
+    satisfies GQLAbstractType
+{
+    isSameTypeAs(GQLType other) => this === other;
+    wrappedName => name_;
+    shared actual String name => name_;
+}
+
+shared interface TypeResolver
+{
+    shared formal GQLType resolveAbstractType(GQLAbstractType abstractType, Object objectValue);
+}
+
+GQLField<Anything> duplicateDetector(GQLField<Anything> earlier, GQLField<Anything> later) {
+    if (!later === earlier) {
+        throw AssertionError("duplicate field definition in type");
+    }
+    return earlier;
+}

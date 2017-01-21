@@ -7,13 +7,21 @@ shared interface GQLWrapperType<out Inner>
 shared class GQLNonNullType<out Inner>(inner)
     extends GQLType(TypeKind.nonNull, null)
     satisfies GQLWrapperType<Inner>
-    //given Inner satisfies GQLNullableType
+    given Inner satisfies GQLNullableType
 {
     shared actual Inner inner;
 
     shared Inner ofType => inner;
 
     shared actual Null name => null;
+
+    shared actual String wrappedName => "``inner.wrappedName``!";
+    shared actual Boolean isSameTypeAs(GQLType other) {
+        if (is GQLNonNullType<GQLType> other) {
+            return inner.isSameTypeAs(other.inner);
+        }
+        return false;
+    }
 }
 
 shared class GQLListType<out Inner>(inner)
@@ -24,6 +32,13 @@ shared class GQLListType<out Inner>(inner)
     shared actual Inner inner;
 
     //shared actual Null name => null;
+    shared actual String wrappedName => "[``inner.wrappedName``]";
+    shared actual Boolean isSameTypeAs(GQLType other) {
+        if (is GQLListType<GQLType> other) {
+            return inner.isSameTypeAs(other.inner);
+        }
+        return false;
+    }
 }
 
 
@@ -37,7 +52,7 @@ satisfies GQLWrapperType<Inner> & InputCoercing<Coerced, Input>
 shared class GQLInpNonNullType<out Inner, out Coerced, in Input>(inner)
     extends GQLNonNullType<Inner>(inner)
     satisfies GQLInpWrapperType<Inner, Coerced, Input>
-    given Inner satisfies InputCoercing<Coerced, Input>
+    given Inner satisfies GQLNullableType&InputCoercing<Coerced, Input>
     given Coerced satisfies Object
     given Input satisfies Object
 {

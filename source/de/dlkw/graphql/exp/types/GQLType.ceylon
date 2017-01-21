@@ -14,6 +14,8 @@ shared abstract class GQLType(kind, name_, description = null)
     shared default actual String? name => name_;
 
     shared default String? description;
+    shared formal String wrappedName;
+    shared formal Boolean isSameTypeAs(GQLType other);
 }
 
 shared void assertGQLName(String name)

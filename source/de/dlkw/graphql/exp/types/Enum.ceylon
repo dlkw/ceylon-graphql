@@ -22,6 +22,10 @@ shared class GQLEnumType(name_, values, description = null)
 
     "Alias for [[values]] to provide the key/value pair in the GraphQL introspection type."
     shared {GQLEnumValue+} enumValues => values;
+    shared actual Boolean isSameTypeAs(GQLType other) => this === other;
+
+    shared actual String wrappedName => name_;
+
 }
 
 shared class GQLEnumValue(name, value__ =null, description=null, deprecated=false, deprecationReason=null)
