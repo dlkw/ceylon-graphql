@@ -1,12 +1,12 @@
 shared abstract class GQLScalarType<out External, in ExternalInput, out Internal = External, in Input = Nothing>(String name, String? description = null)
-    extends GQLNullableType(TypeKind.scalar, name, description)
-    satisfies ResultCoercing<External, ExternalInput> & InputCoercing<Internal, Input>
+    extends GQLNullableType<String>(TypeKind.scalar, name, description)
+    satisfies ResultCoercing<String, External, ExternalInput> & InputCoercing<String, Internal, Input>
     given External satisfies Object
     given Internal satisfies Object
     given Input satisfies Object
     given ExternalInput satisfies Object
 {
-    shared actual Boolean isSameTypeAs(GQLType other) => this === other;
+    shared actual Boolean isSameTypeAs(GQLType<Anything> other) => this === other;
     shared actual String wrappedName => name;
 }
 

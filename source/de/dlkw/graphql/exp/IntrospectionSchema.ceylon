@@ -16,7 +16,7 @@ import de.dlkw.graphql.exp.types {
 object introspection
 {
     GQLObjectType typeEnumValue = GQLObjectType {
-        name_ = "__EnumValue";
+        name = "__EnumValue";
         description = "An Enum value";
         fields_ = {
             GQLField {
@@ -44,7 +44,7 @@ object introspection
     };
 
     GQLObjectType typeInputValue = GQLObjectType {
-        name_ = "__InputValue";
+        name = "__InputValue";
         description = "An input value...";
         fields_ = {
             GQLField {
@@ -67,7 +67,7 @@ object introspection
     };
 
     GQLObjectType typeField = GQLObjectType {
-        name_ = "__Field";
+        name = "__Field";
         description = "A field...";
         fields_ = {
             GQLField {
@@ -91,7 +91,7 @@ object introspection
                 type = GQLNonNullType(gqlBooleanType);
                 Boolean resolver(Anything field, Anything ignored)
                 {
-                    assert (is GQLField<Anything> field);
+                    assert (is GQLField field);
                     return field.deprecated;
                 }
             },
@@ -103,7 +103,7 @@ object introspection
     };
 
     shared GQLObjectType typeType = GQLObjectType {
-        name_ = "__Type";
+        name = "__Type";
         description = "A type...";
         fields_ = {
             GQLField {
@@ -131,7 +131,7 @@ object introspection
                 name = "fields";
                 type = GQLListType(GQLNonNullType(typeField));
                 arguments = map({ "includeDeprecated"->ArgumentDefinition(gqlBooleanType, false) });
-                {GQLField<Anything>*}? resolver(Anything objectType, Map<String, Anything> args)
+                {GQLField*}? resolver(Anything objectType, Map<String, Anything> args)
                 {
                     if (is GQLObjectType objectType) {
                         assert (is Boolean includeDeprecated = args["includeDeprecated"]);
@@ -179,7 +179,7 @@ object introspection
     };
 
     GQLObjectType typeDirective = GQLObjectType {
-        name_ = "__Directive";
+        name = "__Directive";
         description = "A directive...";
         fields_ = {
             GQLField {
@@ -192,7 +192,7 @@ object introspection
             },
             GQLField {
                 name = "locations";
-                type = GQLNonNullType(GQLListType(GQLNonNullType(GQLEnumType("__DirectiveLocation", {
+                type = GQLNonNullType<GQLListType<GQLNonNullType<GQLEnumType, String>, Null>, Null>(GQLListType(GQLNonNullType(GQLEnumType("__DirectiveLocation", {
                     GQLEnumValue("QUERY"),
                     GQLEnumValue("MUTATION"),
                     GQLEnumValue("FIELD"),
@@ -209,7 +209,7 @@ object introspection
     };
 
     shared GQLObjectType typeSchema = GQLObjectType {
-        name_ = "__Schema";
+        name = "__Schema";
         description = "The schema...";
         fields_ = {
             GQLField {

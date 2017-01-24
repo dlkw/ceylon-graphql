@@ -1,6 +1,3 @@
-import ceylon.language.meta {
-    type
-}
 import ceylon.collection {
     MutableSet,
     HashSet,
@@ -14,22 +11,20 @@ import ceylon.logging {
 Logger log = logger(`package`);
 
 shared abstract class GQLAbstractObjectType(name, description)
-    extends GQLNullableType(TypeKind.\iobject, name, description)
+    extends GQLNullableType<String>(TypeKind.\iobject, name, description)
 {
     String name;
     String? description;
-    shared formal Map<String, GQLField<Anything>> fields;
+    shared formal Map<String, GQLField> fields;
 }
 
-shared class GQLObjectType(name_, {GQLField<Anything>+} fields_, shared {GQLInterfaceType*} interfaces={}, description=null)
-    extends GQLAbstractObjectType(name_, description)
+shared class GQLObjectType(name, {GQLField+} fields_, shared {GQLInterfaceType*} interfaces={}, description=null)
+    extends GQLAbstractObjectType(name, description)
 {
-    String name_;
+    String name;
     String? description;
 
-    shared actual String name => name_;
-
-    shared actual Map<String, GQLField<Anything>> fields = map(fields_.map((field) => field.name -> field), duplicateDetector);
+    shared actual Map<String, GQLField> fields = map(fields_.map((field) => field.name -> field), duplicateDetector);
 
     value message = StringBuilder();
     for (iface in interfaces) {
@@ -46,16 +41,16 @@ shared class GQLObjectType(name_, {GQLField<Anything>+} fields_, shared {GQLInte
     if (!message.empty) {
         throw AssertionError("not implementing interfaces:``message``");
     }
-    shared actual Boolean isSameTypeAs(GQLType other) => this === other;
+    shared actual Boolean isSameTypeAs(GQLType<Anything> other) => this === other;
 
-    shared actual String wrappedName => name_;
+    shared actual String wrappedName => name;
 
 }
 
-shared class GQLField<out Value>(name, type, description=null, arguments=emptyMap, deprecated=false, deprecationReason=null, resolver=null)
+shared class GQLField(name, type, description=null, arguments=emptyMap, deprecated=false, deprecationReason=null, resolver=null)
 {
     shared String name;
-    shared GQLType type;
+    shared GQLType<String?> type;
     shared String? description;
     shared Boolean deprecated;
     shared String? deprecationReason;
@@ -73,7 +68,7 @@ shared class GQLField<out Value>(name, type, description=null, arguments=emptyMa
 shared class ArgumentDefinition<out Value>(type, defaultValue=undefined)
     given Value satisfies Object
 {
-    shared <GQLType & InputCoercing<Value, Nothing>> type;
+    shared GQLType<String?> & InputCoercing<String?, Value, Nothing> type;
 
     "The default value used if no value is specified in the graphQL document.
      May be null if null is the default value. If no default value is intended,
@@ -84,11 +79,9 @@ shared class ArgumentDefinition<out Value>(type, defaultValue=undefined)
 shared abstract class Undefined() of undefined {}
 shared object undefined extends Undefined() {}
 
-shared class GQLTypeReference(String name_)
-        extends GQLAbstractObjectType(name_, null)
+shared class GQLTypeReference(String name)
+        extends GQLAbstractObjectType(name, null)
 {
-    shared actual String name => name_;
-
     variable GQLObjectType? holder = null;
 
     shared GQLObjectType referenced
@@ -109,10 +102,10 @@ shared class GQLTypeReference(String name_)
 
     description => referenced.description;
 
-    shared actual Map<String,GQLField<Anything>> fields => referenced.fields;
+    shared actual Map<String,GQLField> fields => referenced.fields;
 
     // what to do here?
-    shared actual Boolean isSameTypeAs(GQLType other) => nothing;
+    shared actual Boolean isSameTypeAs(GQLType<Anything> other) => nothing;
     shared actual String wrappedName => nothing;
 
 }
@@ -131,12 +124,12 @@ void resolveTypeReference(GQLTypeReference typeReference, Map<String, GQLObjectT
 
 void recurseToResolveTypeReference(type, referenceableTypes, startedResolvingTypes)
 {
-    GQLType type;
+    GQLType<Anything> type;
     Map<String, GQLObjectType> referenceableTypes;
     SetMutator<GQLObjectType> startedResolvingTypes;
 
     switch (type)
-    case (is GQLListType<GQLType> | GQLNonNullType<GQLType>) {
+    case (is GQLNonNullType<GQLType<Anything>, Anything> | GQLListType<GQLType<Anything>, Anything>) {
         value inner = type.inner;
         recurseToResolveTypeReference(inner, referenceableTypes, startedResolvingTypes);
     }
@@ -162,43 +155,38 @@ shared void resolveAllTypeReferences(GQLObjectType type, Map<String, GQLObjectTy
 }
 
 
-shared interface GQLAbstractType of GQLInterfaceType | GQLUnionType
-    satisfies Named
+shared abstract class GQLAbstractType(TypeKind kind, String name, String? description) of GQLInterfaceType | GQLUnionType
+    extends GQLNullableType<String>(kind, name, description)
 {
-    shared formal actual String name;
 }
-shared class GQLInterfaceType(String name_, fields_, String? description=null)
-extends GQLNullableType(TypeKind.\iinterface, name_, description)
-    satisfies GQLAbstractType
+shared class GQLInterfaceType(String name, fields_, String? description=null)
+extends GQLAbstractType(TypeKind.\iinterface, name, description)
 {
-    shared actual String name => name_;
-    {GQLField<Anything>+} fields_;
+    {GQLField+} fields_;
     for (field in fields_) {
         if (exists r = field.resolver) {
-            log.warn("field ``field.name`` of interface ``name_`` has a resolver defined, which will never be used");
+            log.warn("field ``field.name`` of interface ``name`` has a resolver defined, which will never be used");
         }
     }
-    shared Map<String, GQLField<Anything>> fields = map(fields_.map((f) => f.name->f), duplicateDetector);
-    shared actual Boolean isSameTypeAs(GQLType other) => this === other;
+    shared Map<String, GQLField> fields = map(fields_.map((f) => f.name->f), duplicateDetector);
+    shared actual Boolean isSameTypeAs(GQLType<Anything> other) => this === other;
 
-    shared actual String wrappedName => name_;
+    shared actual String wrappedName => name;
 }
 
-shared class GQLUnionType(String name_, shared {GQLObjectType+} types, String? description= null)
-extends GQLNullableType(TypeKind.union, name_, description)
-    satisfies GQLAbstractType
+shared class GQLUnionType(String name, shared {GQLObjectType+} types, String? description= null)
+extends GQLAbstractType(TypeKind.union, name, description)
 {
-    isSameTypeAs(GQLType other) => this === other;
-    wrappedName => name_;
-    shared actual String name => name_;
+    isSameTypeAs(GQLType<Anything> other) => this === other;
+    wrappedName => name;
 }
 
 shared interface TypeResolver
 {
-    shared formal GQLType resolveAbstractType(GQLAbstractType abstractType, Object objectValue);
+    shared formal GQLObjectType resolveAbstractType(GQLAbstractType abstractType, Object objectValue);
 }
 
-GQLField<Anything> duplicateDetector(GQLField<Anything> earlier, GQLField<Anything> later) {
+GQLField duplicateDetector(GQLField earlier, GQLField later) {
     if (!later === earlier) {
         throw AssertionError("duplicate field definition in type");
     }

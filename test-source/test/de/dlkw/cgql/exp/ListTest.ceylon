@@ -12,7 +12,8 @@ import de.dlkw.graphql.exp {
     Schema,
     ResolvedNotIterableError,
     FieldNullError,
-    ListCompletionError
+    ListCompletionError,
+    ResultCoercionError
 }
 import ceylon.logging {
     addLogWriter,
@@ -140,4 +141,64 @@ shared void listWithNonNullIntsIsNullNonNull() {
     assertEquals(errors.size, 1);
     assert (is FieldNullError error0 = errors[0]);
     assertEquals(error0.stringPath, "f1[0]");
+}
+
+test
+shared void listWithNullableElementNonCoercible() {
+    value queryRoot = GQLObjectType("queryRoot", {
+        GQLField {
+            name = "f1";
+            type = GQLListType(gqlIntType);
+            resolver = (a, e) => [1, "s"];
+        }
+    });
+
+    value schema = Schema(queryRoot, null);
+
+    value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
+
+    value result = schema.executeRequest(document);
+
+    assertTrue(result.includedExecution);
+    assert (exists data = result.data);
+    assert (exists errors = result.errors);
+
+    assertEquals(data.size, 1);
+    assert (is List<Anything> f1 = data["f1"]);
+    assertEquals(f1.size, 2);
+    assert (is Integer f1_0 = f1[0]);
+    assertEquals(f1_0, 1);
+    assert (is Null f1_1 = f1[1]);
+
+    assertEquals(errors.size, 1);
+    assert (is ResultCoercionError error0 = errors[0]);
+    assertEquals(error0.stringPath, "f1[1]");
+}
+
+test
+shared void listWithNonNullableElementNonCoercible() {
+    value queryRoot = GQLObjectType("queryRoot", {
+        GQLField {
+            name = "f1";
+            type = GQLListType(GQLNonNullType(gqlIntType));
+            resolver = (a, e) => [1, "s"];
+        }
+    });
+
+    value schema = Schema(queryRoot, null);
+
+    value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
+
+    value result = schema.executeRequest(document);
+
+    assertTrue(result.includedExecution);
+    assert (exists data = result.data);
+    assert (exists errors = result.errors);
+
+    assertEquals(data.size, 1);
+    assert (is Null f1 = data["f1"]);
+
+    assertEquals(errors.size, 1);
+    assert (is ResultCoercionError error0 = errors[0]);
+    assertEquals(error0.stringPath, "f1[1]");
 }

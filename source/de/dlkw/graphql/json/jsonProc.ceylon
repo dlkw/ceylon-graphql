@@ -33,9 +33,9 @@ import de.dlkw.graphql.exp.types {
     GQLField,
     GQLObjectType,
     ArgumentDefinition,
-    GQLInpNonNullType,
     GQLInputObjectType,
-    GQLInputField
+    GQLInputField,
+    GQLInputNonNullType
 }
 
 JsonObject exe(Document doc, Schema schema, Anything rootValue)
@@ -107,7 +107,7 @@ shared void run()
                 GQLField("of1s1", gqlIntType)
             });
             arguments = map({
-                "inpObj" -> ArgumentDefinition(GQLInpNonNullType<GQLInputObjectType, Map<String, Anything>, Map<String, Anything>>(GQLInputObjectType(
+                "inpObj" -> ArgumentDefinition(GQLInputNonNullType<GQLInputObjectType, String, Map<String, Anything>, Map<String, Anything>>(GQLInputObjectType(
                     "of1",
                     null,
                     {
@@ -167,8 +167,8 @@ shared void run()
             );
             description="descB";
         },
-        GQLField("nicks", GQLNonNullType(GQLListType(GQLNonNullType(GQLObjectType{
-            name_="kk";
+        GQLField("nicks", GQLNonNullType<GQLListType<GQLNonNullType<GQLObjectType, String>, Null>, Null>(GQLListType(GQLNonNullType(GQLObjectType{
+            name="kk";
             fields_={GQLField{
                 name="n1";
                 type=GQLNonNullType(gqlIntType);

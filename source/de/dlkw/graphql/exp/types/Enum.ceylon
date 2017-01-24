@@ -1,12 +1,11 @@
 shared class GQLEnumType(name_, values, description = null)
-    extends GQLNullableType(TypeKind.enum, name_, description)
-    satisfies ResultCoercing<String, Object> & InputCoercing<String, Object>
+    extends GQLNullableType<String>(TypeKind.enum, name_, description)
+    satisfies ResultCoercing<String, String, Object> & InputCoercing<String, String, Object>
 {
     String name_;
     String? description;
     {GQLEnumValue+} values;
 
-    shared actual String name => name_;
     shared actual String | CoercionError doCoerceResult(Object value_)
     {
         print(value_);
@@ -22,7 +21,7 @@ shared class GQLEnumType(name_, values, description = null)
 
     "Alias for [[values]] to provide the key/value pair in the GraphQL introspection type."
     shared {GQLEnumValue+} enumValues => values;
-    shared actual Boolean isSameTypeAs(GQLType other) => this === other;
+    shared actual Boolean isSameTypeAs(GQLType<Anything> other) => this === other;
 
     shared actual String wrappedName => name_;
 

@@ -41,12 +41,12 @@ import de.dlkw.graphql.exp.types {
     ArgumentDefinition,
     gqlBooleanType,
     InputCoercing,
-    GQLInpNonNullType,
     GQLNullableType,
     GQLInterfaceType,
     GQLUnionType,
     TypeResolver,
-    GQLAbstractType
+    GQLAbstractType,
+    GQLInputNonNullType
 }
 
 Logger log = logger(`package`);
@@ -57,16 +57,16 @@ shared class Schema(query_, mutation)
     shared GQLObjectType? mutation;
 
 
-    GQLField<Nothing> introspectionFieldSchema = GQLField {
+    GQLField introspectionFieldSchema = GQLField {
         name = "__schema";
         type = introspection.typeSchema;
     };
 
-    GQLField<Nothing> introspectionFieldType = GQLField {
+    GQLField introspectionFieldType = GQLField {
         name = "__type";
         type = introspection.typeType;
-        arguments = map({ "name"->ArgumentDefinition<String>(GQLInpNonNullType<GQLNullableType&InputCoercing<String, String>, String, String>(gqlStringType), undefined)});
-        GQLType? resolver(Anything introspectionSupport, Map<String, Anything> arguments)
+        arguments = map({ "name"->ArgumentDefinition<String>(GQLInputNonNullType<GQLNullableType<String>&InputCoercing<String, String, String>, String, String, String>(gqlStringType), undefined)});
+        GQLType<String>? resolver(Anything introspectionSupport, Map<String, Anything> arguments)
         {
             assert (is IntrospectionSupport introspectionSupport);
 
@@ -77,8 +77,7 @@ shared class Schema(query_, mutation)
     };
     Map<String, TypeResolver> typeResolvers = emptyMap;
     TypeResolver unspecificTypeResolver = object satisfies TypeResolver{
-        shared actual GQLType resolveAbstractType(GQLAbstractType abstractType, Object objectValue) => nothing;
-
+        shared actual GQLObjectType resolveAbstractType(GQLAbstractType abstractType, Object objectValue) => nothing;
     };
 
     class GQLObjectTypeWrapper(GQLObjectType wrapped)
@@ -139,7 +138,7 @@ shared class Schema(query_, mutation)
             for (el in RestIterable(iterator)) el };
 */    }
 
-    {GQLType+} registeredTypes = mkExistingFirst(types.items);
+    {GQLType<String>+} registeredTypes = mkExistingFirst(types.items);
     print(registeredTypes);
 
     shared void registerType(GQLObjectType | GQLEnumType type)
@@ -218,7 +217,7 @@ shared class Schema(query_, mutation)
             else {
                 value defaultValue = variableDefinition.defaultValue;
                 if (is Undefined defaultValue) {
-                    if (is GQLNonNullType<GQLType> variableType = variableDefinition.type) {
+                    if (is GQLNonNullType<GQLType<Anything>, Anything> variableType = variableDefinition.type) {
                         errors.add(VariableCoercionError(variableName));
                         hasErrors = true;
                         continue;
@@ -265,7 +264,7 @@ shared class Schema(query_, mutation)
             else {
                 value defaultValue = argumentDefinition.defaultValue;
                 if (is Undefined defaultValue) {
-                    if (is GQLNonNullType<GQLType> argumentType = argumentDefinition.type) {
+                    if (is GQLNonNullType<GQLType<Anything>, Anything> argumentType = argumentDefinition.type) {
                         errors.add(ArgumentCoercionError(path, argumentName));
                         hasErrors = true;
                         continue;
@@ -380,7 +379,7 @@ shared class Schema(query_, mutation)
     {
         GQLAbstractObjectType objectType;
         Anything objectValue;
-        GQLType fieldType;
+        GQLType<String?> fieldType;
         [Field+] fields;
         Map<String, Anything> variableValues;
 
@@ -444,7 +443,7 @@ shared class Schema(query_, mutation)
 
     Anything | NullForError completeValues(fieldType, fields, result, variableValues, errors, path, executor)
     {
-        GQLType fieldType;
+        GQLType<String?> fieldType;
         [Field+] fields;
         Anything result;
         Map<String, Anything> variableValues;
@@ -456,7 +455,7 @@ shared class Schema(query_, mutation)
 
         log.debug("complete ``path``");
 
-        if (is GQLNonNullType<GQLType> fieldType) {
+        if (is GQLNonNullType<GQLType<String?>, Anything> fieldType) {
             if (is FieldError result) {
                 return NullForError();
             }
@@ -477,7 +476,7 @@ shared class Schema(query_, mutation)
 
     Anything | NullForError innerCompleteValues(fieldType, fields, result, variableValues, inNonNull, errors, path, executor)
     {
-        GQLType fieldType;
+        GQLType<String?> fieldType;
         [Field+] fields;
         Anything result;
         Map<String, Anything> variableValues;
@@ -496,7 +495,7 @@ shared class Schema(query_, mutation)
         }
 
         switch (fieldType)
-        case (is GQLListType<GQLType>) {
+        case (is GQLListType<GQLType<String?>, Anything>) {
             if (!is Iterable<Anything> result) {
                 errors.add(ResolvedNotIterableError(path));
                 return (inNonNull) then NullForError();
@@ -529,7 +528,12 @@ shared class Schema(query_, mutation)
             return elementResults.sequence();
         }
         case (is GQLScalarType<Anything, Nothing> | GQLEnumType) {
-            return fieldType.coerceResult(result);
+            value coerced = fieldType.coerceResult(result);
+            if (is CoercionError coerced) {
+                errors.add(ResultCoercionError(path, coerced));
+                return (inNonNull) then NullForError();
+            }
+            return coerced;
         }
         case (is GQLAbstractObjectType | GQLInterfaceType | GQLUnionType) {
             GQLAbstractObjectType objectType;
@@ -568,7 +572,7 @@ shared class Schema(query_, mutation)
 
     GQLObjectType resolveAbstractType(GQLAbstractType abstractType, Object objectValue)
     {
-        GQLType? resolvedType;
+        GQLType<String>? resolvedType;
         if (exists typeResolver = typeResolvers[abstractType.name]) {
             resolvedType = typeResolver.resolveAbstractType(abstractType, objectValue);
         }
@@ -623,7 +627,7 @@ shared class Schema(query_, mutation)
     class IntrospectionSupport(types, queryType, mutationType, directives)
     {
         shared IntrospectionSupport __schema => this;
-        shared {GQLType+} types;
+        shared {GQLType<String>+} types;
         shared GQLObjectType queryType;
         shared GQLObjectType? mutationType;
         shared Empty directives;
@@ -744,6 +748,12 @@ shared class ArgumentCoercionError(path, argumentName)
 {
     [String, <String|Integer>*] path;
     shared String argumentName;
+}
+
+shared class ResultCoercionError(path, CoercionError coercionError)
+    extends FieldError("result coercion: ``coercionError.message``", path) // TODO
+{
+    [String, <String|Integer>*] path;
 }
 
 shared class ResolvingError(path)

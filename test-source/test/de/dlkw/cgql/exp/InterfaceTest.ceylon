@@ -8,6 +8,7 @@ import ceylon.test {
     assertTrue,
     test
 }
+
 import de.dlkw.graphql.exp {
     OperationDefinition,
     Field,
@@ -21,8 +22,7 @@ import de.dlkw.graphql.exp.types {
     GQLObjectType,
     GQLInterfaceType,
     gqlStringType,
-    GQLNonNullType,
-    GQLListType
+    GQLNonNullType
 }
 test
 shared void implementsAll() {
@@ -52,13 +52,13 @@ shared void implementsAll() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.executeRequest(document, null, map({"f1"->5}));
+    value result = schema.executeRequest(document, null, map({"f1"->"s"}));
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
     assertNull(result.errors);
 
     assertEquals(data.size, 1);
-    assert (is Integer f1 = data["f1"]);
-    assertEquals(f1, 5);
+    assert (is String f1 = data["f1"]);
+    assertEquals(f1, "s");
 }

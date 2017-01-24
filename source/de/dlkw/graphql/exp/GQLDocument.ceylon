@@ -49,7 +49,7 @@ shared class VariableDefinition<Value, out TypeName>(type, defaultValue = undefi
     given Value satisfies Object
     given TypeName of String | Null
 {
-    shared GQLType & InputCoercing<Object, Nothing> type;
+    shared GQLType<TypeName> & InputCoercing<TypeName, Object, Nothing> type;
     shared Value?|Undefined defaultValue;
 }
 
