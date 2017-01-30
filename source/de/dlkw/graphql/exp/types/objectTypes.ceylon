@@ -15,10 +15,12 @@ shared abstract class GQLAbstractObjectType(name, description)
 {
     String name;
     String? description;
+    shared formal GQLObjectType type;
     shared formal Map<String, GQLField> fields;
+    shared formal {GQLInterfaceType*} interfaces;
 }
 
-shared class GQLObjectType(name, {GQLField+} fields_, shared {GQLInterfaceType*} interfaces={}, description=null)
+shared class GQLObjectType(name, {GQLField+} fields_, shared actual {GQLInterfaceType*} interfaces={}, description=null)
     extends GQLAbstractObjectType(name, description)
 {
     String name;
@@ -41,10 +43,10 @@ shared class GQLObjectType(name, {GQLField+} fields_, shared {GQLInterfaceType*}
     if (!message.empty) {
         throw AssertionError("not implementing interfaces:``message``");
     }
+    shared actual GQLObjectType type => this;
     shared actual Boolean isSameTypeAs(GQLType<Anything> other) => this === other;
 
     shared actual String wrappedName => name;
-
 }
 
 shared class GQLField(name, type, description=null, arguments=emptyMap, deprecated=false, deprecationReason=null, resolver=null)
@@ -103,9 +105,11 @@ shared class GQLTypeReference(String name)
     description => referenced.description;
 
     shared actual Map<String,GQLField> fields => referenced.fields;
+    shared actual {GQLInterfaceType*} interfaces=>referenced.interfaces;
 
-    // what to do here?
-    shared actual Boolean isSameTypeAs(GQLType<Anything> other) => nothing;
+    shared actual GQLObjectType type => referenced;
+
+    shared actual Boolean isSameTypeAs(GQLType<Anything> other) => other === referenced;
     shared actual String wrappedName => nothing;
 
 }

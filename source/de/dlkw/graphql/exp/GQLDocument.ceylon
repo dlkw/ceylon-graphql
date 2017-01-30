@@ -3,12 +3,20 @@ import de.dlkw.graphql.exp.types {
     Undefined,
     GQLType,
     assertGQLName,
-    InputCoercing
+    InputCoercing,
+    Named
 }
+
+shared interface IFragmentTypeConditioned
+{
+    shared formal String? typeCondition;
+}
+
 shared class Document(definitions)
 {
     <OperationDefinition | FragmentDefinition>[] definitions;
     value operationDefinitions = definitions.narrow<OperationDefinition>();
+    value fragmentDefinitions = definitions.narrow<FragmentDefinition>();
 
     variable value operationCount = 0;
     variable value firstOperationIsUnnamed = false;
@@ -21,10 +29,13 @@ shared class Document(definitions)
         }
     }
 
+    shared FragmentDefinition? fragmentDefinition(String name) =>
+        fragmentDefinitions.filter((fDef)=>fDef.name.equals(name)).first;
+
     shared OperationDefinition? operationDefinition(String? name)
     {
         if (exists name) {
-            return operationDefinitions.filter((operationDefinition)=>operationDefinition.name?.equals(name) else false).first;
+            return operationDefinitions.filter((oDef)=>oDef.name?.equals(name) else false).first;
         }
         else if (operationDefinitions.shorterThan(2)) {
             return operationDefinitions.first;
@@ -33,6 +44,7 @@ shared class Document(definitions)
             throw AssertionError("Operation name must be specified if document contains more than one operation.");
         }
     }
+
 }
 
 shared class OperationDefinition(type, selectionSet, name = null, variableDefinitions_ = null)
@@ -59,10 +71,10 @@ shared class OperationType of query | mutation
     shared new mutation{}
 }
 
-shared alias Selection => Field | FragmentSpread | InlineFragment;
+shared alias Selection => AField | FragmentSpread | InlineFragment;
 shared alias DocumentScalarValue => Integer|Float|String|Boolean|Null;
 
-shared class Field(name, alias_=null, arguments_=null, directives=null, selectionSet=null)
+shared abstract class AField(name, alias_)
 {
     shared String name;
     assertGQLName(name);
@@ -72,13 +84,23 @@ shared class Field(name, alias_=null, arguments_=null, directives=null, selectio
         assertGQLName(alias_);
     }
 
-    shared String responseKey => if (exists alias_) then alias_ else name;
+    shared String responseKey => if (exists a = alias_) then a else name;
+
+    shared formal Map<String, Anything> arguments;
+
+    shared formal [Selection+]? selectionSet;
+}
+shared class Field(name, alias_=null, arguments_=null, directives=null, selectionSet=null)
+    extends AField(name, alias_)
+{
+    String name;
+    String? alias_;
 
     [Argument+]? arguments_;
-    shared Map<String, Anything> arguments = if (exists arguments_) then map(arguments_.map((arg)=>arg.name->arg.value_)) else emptyMap;
+    shared actual Map<String, Anything> arguments = if (exists arguments_) then map(arguments_.map((arg)=>arg.name->arg.value_)) else emptyMap;
     shared [Directive+]? directives;
 
-    shared [Selection+]? selectionSet;
+    shared actual [Selection+]? selectionSet;
 }
 
 shared class Argument(name, value_)
@@ -86,7 +108,7 @@ shared class Argument(name, value_)
     shared String name;
     assertGQLName(name);
 
-    shared DocumentScalarValue | Map<String, Anything> value_;
+    shared Anything value_;
 }
 
 shared class Directive()
@@ -94,21 +116,42 @@ shared class Directive()
 
 }
 
-shared class FragmentSpread()
+shared abstract class Fragment(selectionSet, typeCondition, directives)
 {
+    shared [Selection+] selectionSet;
+    shared String? typeCondition;
+    shared [Directive+]? directives;
 }
 
-shared class InlineFragment()
+shared class FragmentSpread(name, directives=null)
 {
+    shared String name;
+    assertGQLName(name);
+    assert (name != "on");//FIXME
+
+    shared [Directive*]? directives;
 }
 
-shared class FragmentDefinition()
+shared class InlineFragment(selectionSet, typeCondition = null, directives = null)
+    extends Fragment(selectionSet, typeCondition, directives)
 {
+    [Selection+] selectionSet;
+    String? typeCondition;
+    [Directive+]? directives;
+}
+
+shared class FragmentDefinition(name, selectionSet, typeCondition, directives = null)
+    extends Fragment(selectionSet, typeCondition, directives)
+{
+    shared String name;
+    [Selection+] selectionSet;
+    String? typeCondition;
+    [Directive+]? directives;
 }
 
 Document doci()
 {
-    value doc =Document([OperationDefinition(OperationType.query, [Field{
+    value doc = Document([OperationDefinition(OperationType.query, [Field{
                 name="fA";
                 selectionSet = [Field("f2")];
     }])]);

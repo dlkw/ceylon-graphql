@@ -187,7 +187,7 @@ shared class Schema(query_, mutation)
             topLevelExecutor = serialExecutor;
         }
 
-        value result = executeSelectionSet(operationDefinition.selectionSet, rootType, rootValue, coercedVariables, errors, null, executor, true);
+        value result = executeSelectionSet(operationDefinition.selectionSet, rootType, rootValue, coercedVariables, document.fragmentDefinition, errors, null, executor, true);
         if (is NullForError result) {
             return ExtResultImplTODO(true, null, errors);
         }
@@ -238,7 +238,7 @@ shared class Schema(query_, mutation)
     Map<String, Anything> | FieldError coerceArgumentValues2(objectType, field, variableValues, errors, path)
     {
         GQLAbstractObjectType objectType;
-        Field field;
+        AField field;
         Map<String, Anything> variableValues;
 
         [String, <String|Integer>*] path;
@@ -282,13 +282,14 @@ shared class Schema(query_, mutation)
         return map(coercedValues);
     }
 
-    Map<String, Anything> | NullForError executeSelectionSet(selectionSet, objectType, objectValue, variableValues, errors, executedPath, executor, topLevel)
+    Map<String, Anything> | NullForError executeSelectionSet(selectionSet, objectType, objectValue, variableValues, lookupFragmentDefinition, errors, executedPath, executor, topLevel)
     {
         [Selection+] selectionSet;
         GQLAbstractObjectType objectType;
         Anything objectValue;
         Map<String, Anything> variableValues;
 
+        FragmentDefinition? lookupFragmentDefinition(String name);
         ListMutator<FieldError> errors;
         [String, <String|Integer>*]? executedPath;
         Executor executor;
@@ -297,7 +298,7 @@ shared class Schema(query_, mutation)
 
         log.debug("execute selection set of object ``executedPath else "null"``");
 
-        value groupedFieldSet = collectFields(objectType, selectionSet, variableValues);
+        value groupedFieldSet = collectFields(objectType, selectionSet, variableValues, lookupFragmentDefinition);
 
         variable Boolean hasFieldErrors = false;
         MutableMap<String, Anything> resultMap = HashMap<String, Anything>();
@@ -325,7 +326,7 @@ shared class Schema(query_, mutation)
                 usedObjectValue = objectValue;
             }
 
-            value responseValue = executeField(objectType, usedObjectValue, fieldDefinition.type, fields, variableValues, errors, pathToExecute, executor);
+            value responseValue = executeField(objectType, usedObjectValue, fieldDefinition.type, fields, variableValues, lookupFragmentDefinition, errors, pathToExecute, executor);
             if (is NullForError responseValue) {
                 hasFieldErrors = true;
             }
@@ -339,19 +340,19 @@ shared class Schema(query_, mutation)
         return resultMap;
     }
 
-    Map<String, [Field+]> collectFields(GQLAbstractObjectType objectType, [Selection+] selectionSet, variableValues, MutableSet<Object>? visitedFragments=HashSet<Object>())
+    Map<String, [AField+]> collectFields(GQLAbstractObjectType objectType, [Selection+] selectionSet, variableValues, FragmentDefinition? lookupFragmentDefinition(String name), MutableSet<Object> visitedFragments=HashSet<Object>())
     {
         Map<String, Anything> variableValues;
 
-        MutableMap<String, [Field+]> groupedFields = HashMap<String, [Field+]>(linked);
+        MutableMap<String, [AField+]> groupedFields = HashMap<String, [AField+]>(linked);
         for (selection in selectionSet) {
             // TODO 3a @skip directive
             // TODO 3b @include directive
 
             switch (selection)
-            case (is Field) {
+            case (is AField) {
                 String responseKey = selection.responseKey;
-                [Field+] groupForResponseKey;
+                [AField+] groupForResponseKey;
                 if (exists tmp = groupedFields[responseKey]) {
                     groupForResponseKey = tmp.withTrailing(selection);
                 }
@@ -360,14 +361,63 @@ shared class Schema(query_, mutation)
                 }
                 groupedFields[responseKey] = groupForResponseKey;
             }
-            case (is FragmentSpread) {
-                throw AssertionError("not implemented yet");
-            }
-            case (is InlineFragment) {
-                throw AssertionError("not implemented yet");
+            case (is FragmentSpread | InlineFragment) {
+                Fragment fragment;
+                if (is FragmentSpread selection) {
+                    if (!visitedFragments.add(selection.name)) {
+                        continue;
+                    }
+                    Fragment? fragmentDefinition = lookupFragmentDefinition(selection.name);
+                    if (is Null fragmentDefinition) {
+                        continue;
+                    }
+                    fragment = fragmentDefinition;
+                }
+                else {
+                    fragment = selection;
+                }
+
+                if (exists fragmentTypeName = fragment.typeCondition) {
+                    value fragmentType = registeredTypes.find((t)=>t.name == fragmentTypeName);
+                    if (is Null fragmentType) {
+                        continue;
+                    }
+                    if (!doesFragmentTypeApply(objectType, fragmentType)) {
+                        continue;
+                    }
+                }
+
+                value fragmentGroupedFieldSet = collectFields(objectType, fragment.selectionSet, variableValues, lookupFragmentDefinition, visitedFragments);
+
+                for (responseKey -> fragmentGroup in fragmentGroupedFieldSet) {
+                    [AField+] groupForResponseKey;
+                    if (exists tmp = groupedFields[responseKey]) {
+                        groupForResponseKey = tmp.append(fragmentGroup);
+                    }
+                    else {
+                        groupForResponseKey = fragmentGroup;
+                    }
+                    groupedFields[responseKey] = groupForResponseKey;
+                }
             }
         }
         return groupedFields;
+    }
+
+    Boolean doesFragmentTypeApply(GQLAbstractObjectType objectType, GQLType<String> fragmentType) {
+        switch (fragmentType)
+        case (is GQLObjectType) {
+            return objectType.isSameTypeAs(fragmentType);
+        }
+        case (is GQLInterfaceType) {
+            return objectType.interfaces.contains(fragmentType);
+        }
+        case (is GQLUnionType) {
+            return fragmentType.types.contains(objectType.type);
+        }
+        else {
+            return false;
+        }
     }
 
     "Returns type [[Null]], [[Integer]], [[Float]], [[String]], [[Boolean]],
@@ -375,14 +425,15 @@ shared class Schema(query_, mutation)
      or a [[Map]] mapping Strings to any of these 7 types.
      Returns [[NullForError]] if the executed field gets a null value because of error propagation
      from a field error in a non-nullable field in [[fields]]."
-    Anything | NullForError executeField(objectType, objectValue, fieldType, fields, variableValues, errors, path, executor)
+    Anything | NullForError executeField(objectType, objectValue, fieldType, fields, variableValues, lookupFragmentDefinition, errors, path, executor)
     {
         GQLAbstractObjectType objectType;
         Anything objectValue;
         GQLType<String?> fieldType;
-        [Field+] fields;
+        [AField+] fields;
         Map<String, Anything> variableValues;
 
+        FragmentDefinition? lookupFragmentDefinition(String name);
         ListMutator<FieldError> errors;
         [String, <String|Integer>*] path;
 
@@ -390,7 +441,7 @@ shared class Schema(query_, mutation)
 
         log.debug("execute field ``path``");
 
-        Field field = fields.first;
+        AField field = fields.first;
 
         value argumentValues = coerceArgumentValues2(objectType, field, variableValues, errors, path);
         if (is FieldError argumentValues) {
@@ -398,7 +449,7 @@ shared class Schema(query_, mutation)
         }
         value resolvedValue = resolveFieldValue(objectType, objectValue, field.name, argumentValues, errors, path);
         // a field error from resolution will be converted to null or propagated up by the completeValues call
-        return completeValues(fieldType, fields, resolvedValue, variableValues, errors, path, executor);
+        return completeValues(fieldType, fields, resolvedValue, variableValues, lookupFragmentDefinition, errors, path, executor);
     }
 
     Anything | ResolvingError resolveFieldValue(objectType, objectValue, fieldName, argumentValues, errors, path)
@@ -441,13 +492,14 @@ shared class Schema(query_, mutation)
         }
     }
 
-    Anything | NullForError completeValues(fieldType, fields, result, variableValues, errors, path, executor)
+    Anything | NullForError completeValues(fieldType, fields, result, variableValues, lookupFragmentDefinition, errors, path, executor)
     {
         GQLType<String?> fieldType;
-        [Field+] fields;
+        [AField+] fields;
         Anything result;
         Map<String, Anything> variableValues;
 
+        FragmentDefinition? lookupFragmentDefinition(String name);
         ListMutator<FieldError> errors;
         [String, <String|Integer>*] path;
 
@@ -460,7 +512,7 @@ shared class Schema(query_, mutation)
                 return NullForError();
             }
 
-            value completedResult = innerCompleteValues(fieldType.inner, fields, result, variableValues, true, errors, path, executor);
+            value completedResult = innerCompleteValues(fieldType.inner, fields, result, variableValues, lookupFragmentDefinition, true, errors, path, executor);
             if (!is NullForError completedResult, is Null v = completedResult) {
                 log.error("resolved a null value for non-null typed field ``path``");
                 value error = FieldNullError(path);
@@ -470,17 +522,18 @@ shared class Schema(query_, mutation)
             return completedResult;
         }
 
-        value completedResult = innerCompleteValues(fieldType, fields, result, variableValues, false, errors, path, executor);
+        value completedResult = innerCompleteValues(fieldType, fields, result, variableValues, lookupFragmentDefinition, false, errors, path, executor);
         return completedResult;
     }
 
-    Anything | NullForError innerCompleteValues(fieldType, fields, result, variableValues, inNonNull, errors, path, executor)
+    Anything | NullForError innerCompleteValues(fieldType, fields, result, variableValues, lookupFragmentDefinition, inNonNull, errors, path, executor)
     {
         GQLType<String?> fieldType;
-        [Field+] fields;
+        [AField+] fields;
         Anything result;
         Map<String, Anything> variableValues;
 
+        FragmentDefinition? lookupFragmentDefinition(String name);
         Boolean inNonNull;
 
         ListMutator<FieldError> errors;
@@ -509,7 +562,7 @@ shared class Schema(query_, mutation)
             MutableList<Anything> elementResults = ArrayList<Anything>();
             try {
                 for (i->v in iterable.indexed) {
-                    value elementResult = completeValues(fieldType.inner, fields, v, variableValues, errors, path.withTrailing(i), executor);
+                    value elementResult = completeValues(fieldType.inner, fields, v, variableValues, lookupFragmentDefinition, errors, path.withTrailing(i), executor);
                     if (is NullForError elementResult) {
                         hasFieldErrors = true;
                     } else {
@@ -545,7 +598,7 @@ shared class Schema(query_, mutation)
             }
             try {
                 value subSelectionSet = mergeSelectionSets(fields);
-                value resultObjectValue = executeSelectionSet(subSelectionSet, objectType, result, variableValues, errors, path, executor, false);
+                value resultObjectValue = executeSelectionSet(subSelectionSet, objectType, result, variableValues, lookupFragmentDefinition, errors, path, executor, false);
                 if (!inNonNull) {
                     if (is NullForError resultObjectValue) {
                         return null;
@@ -607,7 +660,7 @@ shared class Schema(query_, mutation)
     }
     */
 
-    [Selection+] mergeSelectionSets([Field+] fields)
+    [Selection+] mergeSelectionSets([AField+] fields)
     {
         variable [Selection*] x = [];
         for (field in fields) {

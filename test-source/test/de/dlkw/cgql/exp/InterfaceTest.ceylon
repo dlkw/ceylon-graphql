@@ -14,7 +14,10 @@ import de.dlkw.graphql.exp {
     Field,
     OperationType,
     Document,
-    Schema
+    Schema,
+    FragmentDefinition,
+    InlineFragment,
+    FragmentSpread
 }
 import de.dlkw.graphql.exp.types {
     gqlIntType,
@@ -37,14 +40,15 @@ shared void implementsAll() {
         GQLField("f3", gqlIntType)
     });
 
-    value queryRoot = GQLObjectType("queryRoot", {
+    value queryRoot = GQLObjectType("QueryRoot", {
         GQLField {
             name = "f1";
                     gqlStringType;
             //resolver = (a, e) => 5;
         },
     GQLField{"f2"; gqlIntType;},
-    GQLField("f3", gqlIntType)
+    GQLField("f3", gqlIntType),
+    GQLField("f4", gqlIntType)
     },
         { iface1, iface2 });
 
@@ -52,7 +56,9 @@ shared void implementsAll() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.executeRequest(document, null, map({"f1"->"s"}));
+    value document2 = Document([FragmentDefinition("frag1", [Field("f4")], "QueryRoot"), OperationDefinition(OperationType.query, [InlineFragment([Field("f1")]), FragmentSpread("frag1")])]);
+
+    value result = schema.executeRequest(document2, null, map({"f1"->"s"}));
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
