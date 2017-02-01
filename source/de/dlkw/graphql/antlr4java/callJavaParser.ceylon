@@ -108,30 +108,78 @@ Selection createSelection(GraphQLParser.SelectionContext selCtx)
     return createInlineFragment(inlineFragmentCtx);
 }
 
+
+shared class Val(val)
+{
+    shared Anything val;
+}
+
+/*
+shared class SVal(shared String val) extends Val<String>(){}
+shared class IVal() extends Val(){}
+shared class NVal() extends Val(){}
+shared class BVal(shared Boolean val) extends Val(){}
+shared class EVal(shared String val) extends Val(){}
+shared class OVal(v) extends Val()
+{
+    shared Map<String, Val | Var> v;
+}
+*/
+
+shared class Var(name)
+{
+    shared String name;
+}
+
 Argument createArgument(GraphQLParser.ArgumentContext argumentContext)
 {
+    Val | Var convertValue(GraphQLParser.ValueOrVariableContext valueOrVariableContext)
+    {
+        if (exists var = valueOrVariableContext.variable()) {
+            return Var(var.name().text);
+        }
+        assert (exists val = valueOrVariableContext.\ivalue());
+
+        Val value_;
+        switch (val)
+        case (is GraphQLParser.StringValueContext) {
+            value_ = Val(val.text.removeInitial("\"").removeTerminal("\""));
+        }
+        case (is GraphQLParser.NumberValueContext) {
+            value s = val.text;
+            if (s.containsAny({'.', 'e', 'E'})) {
+                assert (is Float f = Float.parse(s));
+                value_ = Val(f);
+            }
+            else {
+                assert (is Integer i = Integer.parse(s));
+                value_ = Val(i);
+            }
+        }
+        case (is GraphQLParser.NullValueContext) {
+            value_ = Val(null);
+        }
+        case (is GraphQLParser.BooleanValueContext) {
+            value_ = Val(val.text == "true");
+        }
+        case (is GraphQLParser.EnumValueContext) {
+            value_ = Val(val.text);
+        }
+        case (is GraphQLParser.ArrayValueContext) {
+            value_ = Val([ for (valOrVar in val.array().valueOrVariable()) convertValue(valOrVar) ]);
+        }
+        case (is GraphQLParser.ObjectValueContext) {
+            value_ = Val(map({ for (arg in val.\iobject().argument()) arg.name().text -> convertValue(arg.valueOrVariable()) }));
+        }
+        else {
+            throw AssertionError("could not create argument of type ``type(val)``");
+        }
+        return value_;
+    }
+
     String name = argumentContext.name().text;
-    value x = argumentContext.valueOrVariable().\ivalue();
-    Anything value_;
-    switch (x)
-    case (is GraphQLParser.StringValueContext) {
-        value_ = x.text.removeInitial("\"").removeTerminal("\"");
-    }
-    case (is GraphQLParser.NullValueContext) {
-        value_ = null;
-    }
-    case (is GraphQLParser.BooleanValueContext) {
-        value_ = x.text == "true";
-    }
-    case (is GraphQLParser.EnumValueContext) {
-        value_ = x.text;
-    }
-    case (is GraphQLParser.ArrayValueContext) {
-        value_ = [ for (ctx in x.array().\ivalue()) ctx.text.removeInitial("\"").removeTerminal("\"") ];
-    }
-    else {
-        throw AssertionError("could not create argument of type ``type(x)``");
-    }
+    value x = argumentContext.valueOrVariable();
+    Val | Var value_ = convertValue(x);
     return Argument(name, value_);
 }
 

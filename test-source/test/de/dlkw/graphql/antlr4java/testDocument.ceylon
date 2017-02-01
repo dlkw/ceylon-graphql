@@ -8,7 +8,9 @@ import ceylon.test {
 
 import de.dlkw.graphql.antlr4java {
     parseDocument,
-    ParseError
+    ParseError,
+    Val,
+    Var
 }
 import de.dlkw.graphql.exp {
     OperationType,
@@ -143,8 +145,8 @@ shared void testFieldWithStringArgumentNamedNull()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (exists a = f.arguments["null"]);
-    assertEquals(a, "o8");
+    assert (is Val a = f.arguments["null"]);
+    assertEquals(a.val, "o8");
 }
 
 test
@@ -159,8 +161,8 @@ shared void testFieldWithNullArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (f.arguments.defines("a"));
-    assertNull(f.arguments["a"]);
+    assert (is Val a = f.arguments.get("a"));
+    assertNull(a.val);
 }
 
 test
@@ -175,9 +177,8 @@ shared void testFieldWithTrueArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (exists a = f.arguments["a"]);
-    assert (is Boolean a);
-    assertTrue(a);
+    assert (is Val a = f.arguments["a"]);
+    assertEquals(a.val, true);
 }
 
 test
@@ -192,9 +193,8 @@ shared void testFieldWithFalseArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (exists a = f.arguments["a"]);
-    assert (is Boolean a);
-    assertFalse(a);
+    assert (is Val a = f.arguments["a"]);
+    assertEquals(a.val, false);
 }
 
 test
@@ -209,8 +209,8 @@ shared void testFieldWithEnumArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (exists a = f.arguments["true"]);
-    assertEquals(a, "boing");
+    assert (is Val a = f.arguments["true"]);
+    assertEquals(a.val, "boing");
 }
 
 test
@@ -225,8 +225,9 @@ shared void testFieldWithIntArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (exists a = f.arguments["true"]);
-    assertEquals(a, "boing");
+    assert (is Val a = f.arguments["true"]);
+    assert (is Integer b = a.val);
+    assertEquals(a.val, 5);
 }
 
 test
@@ -241,14 +242,14 @@ shared void testFieldWithFloatArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (exists a = f.arguments["true"]);
-    assertEquals(a, "boing");
+    assert (is Val a = f.arguments["true"]);
+    assertEquals(a.val, 5.1);
 }
 
 test
 shared void testFieldWithListArgument()
 {
-    String doc = "{f(true:[\"v0\", \"v1\"])}";
+    String doc = "{f(true:[3, $vv, \"4\"])}";
     value parsedDoc = parseDocument(doc);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
@@ -257,14 +258,21 @@ shared void testFieldWithListArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (exists a = f.arguments["true"]);
-    assertEquals(a, ["v0", "v1"]);
+    assert (is Val a = f.arguments["true"]);
+    assert (is Sequence<Val|Var> s = a.val);
+    assertEquals(s.size, 3);
+    assert (is Val e0 = s[0]);
+    assertEquals(e0.val, 3);
+    assert (is Var e1 = s[1]);
+    assertEquals(e1.name, "vv");
+    assert (is Val e2 = s[2]);
+    assertEquals(e2.val, "4");
 }
 
 test
 shared void testFieldWithObjectArgument()
 {
-    String doc = "{f(true:{s:\"v\"})}";
+    String doc = "{f(true:{s:\"v\", ff:$vvv})}";
     value parsedDoc = parseDocument(doc);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
@@ -273,8 +281,15 @@ shared void testFieldWithObjectArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (exists a = f.arguments["true"]);
-    assertEquals(a, "boing");
+    assert (is Val a = f.arguments["true"]);
+    assert (is Map<> m = a.val);
+    assertEquals(m.size, 2);
+    value s = m.get("s");
+    assert (is Val s);
+    assertEquals(s.val, "v");
+    value ff = m.get("ff");
+    assert (is Var ff);
+    assertEquals(ff.name, "vvv");
 }
 
 test

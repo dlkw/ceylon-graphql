@@ -145,7 +145,7 @@ nonNullType
    ;
 
 array
-   : '[' value ( ',' value )* ']' | '[' ']'
+   : '[' valueOrVariable ( ',' valueOrVariable )* ']' | '[' ']'
    ;
 
 object

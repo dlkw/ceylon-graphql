@@ -2000,11 +2000,11 @@ public class GraphQLParser extends Parser {
 	}
 
 	public static class ArrayContext extends ParserRuleContext {
-		public List<ValueContext> value() {
-			return getRuleContexts(ValueContext.class);
+		public List<ValueOrVariableContext> valueOrVariable() {
+			return getRuleContexts(ValueOrVariableContext.class);
 		}
-		public ValueContext value(int i) {
-			return getRuleContext(ValueContext.class,i);
+		public ValueOrVariableContext valueOrVariable(int i) {
+			return getRuleContext(ValueOrVariableContext.class,i);
 		}
 		public ArrayContext(ParserRuleContext parent, int invokingState) {
 			super(parent, invokingState);
@@ -2039,7 +2039,7 @@ public class GraphQLParser extends Parser {
 				setState(241);
 				match(T__14);
 				setState(242);
-				value();
+				valueOrVariable();
 				setState(247);
 				_errHandler.sync(this);
 				_la = _input.LA(1);
@@ -2049,7 +2049,7 @@ public class GraphQLParser extends Parser {
 					setState(243);
 					match(T__1);
 					setState(244);
-					value();
+					valueOrVariable();
 					}
 					}
 					setState(249);
@@ -2347,20 +2347,20 @@ public class GraphQLParser extends Parser {
 		"\u00e8\u00ea\3\2\2\2\u00e9\u00e1\3\2\2\2\u00e9\u00e5\3\2\2\2\u00ea\63"+
 		"\3\2\2\2\u00eb\u00ec\5> \2\u00ec\65\3\2\2\2\u00ed\u00ee\7\21\2\2\u00ee"+
 		"\u00ef\5\62\32\2\u00ef\u00f0\7\22\2\2\u00f0\67\3\2\2\2\u00f1\u00f2\7\23"+
-		"\2\2\u00f29\3\2\2\2\u00f3\u00f4\7\21\2\2\u00f4\u00f9\5\60\31\2\u00f5\u00f6"+
-		"\7\4\2\2\u00f6\u00f8\5\60\31\2\u00f7\u00f5\3\2\2\2\u00f8\u00fb\3\2\2\2"+
-		"\u00f9\u00f7\3\2\2\2\u00f9\u00fa\3\2\2\2\u00fa\u00fc\3\2\2\2\u00fb\u00f9"+
-		"\3\2\2\2\u00fc\u00fd\7\22\2\2\u00fd\u0101\3\2\2\2\u00fe\u00ff\7\21\2\2"+
-		"\u00ff\u0101\7\22\2\2\u0100\u00f3\3\2\2\2\u0100\u00fe\3\2\2\2\u0101;\3"+
-		"\2\2\2\u0102\u0103\7\3\2\2\u0103\u010a\5\26\f\2\u0104\u0106\7\4\2\2\u0105"+
-		"\u0104\3\2\2\2\u0105\u0106\3\2\2\2\u0106\u0107\3\2\2\2\u0107\u0109\5\26"+
-		"\f\2\u0108\u0105\3\2\2\2\u0109\u010c\3\2\2\2\u010a\u0108\3\2\2\2\u010a"+
-		"\u010b\3\2\2\2\u010b\u010d\3\2\2\2\u010c\u010a\3\2\2\2\u010d\u010e\7\5"+
-		"\2\2\u010e\u0112\3\2\2\2\u010f\u0110\7\3\2\2\u0110\u0112\7\5\2\2\u0111"+
-		"\u0102\3\2\2\2\u0111\u010f\3\2\2\2\u0112=\3\2\2\2\u0113\u0114\t\3\2\2"+
-		"\u0114?\3\2\2\2\u0115\u0116\7\26\2\2\u0116A\3\2\2\2!EIORV[`jnqtx\u0084"+
-		"\u0090\u0095\u0098\u00a1\u00aa\u00b9\u00c3\u00cc\u00d6\u00df\u00e3\u00e7"+
-		"\u00e9\u00f9\u0100\u0105\u010a\u0111";
+		"\2\2\u00f29\3\2\2\2\u00f3\u00f4\7\21\2\2\u00f4\u00f9\5.\30\2\u00f5\u00f6"+
+		"\7\4\2\2\u00f6\u00f8\5.\30\2\u00f7\u00f5\3\2\2\2\u00f8\u00fb\3\2\2\2\u00f9"+
+		"\u00f7\3\2\2\2\u00f9\u00fa\3\2\2\2\u00fa\u00fc\3\2\2\2\u00fb\u00f9\3\2"+
+		"\2\2\u00fc\u00fd\7\22\2\2\u00fd\u0101\3\2\2\2\u00fe\u00ff\7\21\2\2\u00ff"+
+		"\u0101\7\22\2\2\u0100\u00f3\3\2\2\2\u0100\u00fe\3\2\2\2\u0101;\3\2\2\2"+
+		"\u0102\u0103\7\3\2\2\u0103\u010a\5\26\f\2\u0104\u0106\7\4\2\2\u0105\u0104"+
+		"\3\2\2\2\u0105\u0106\3\2\2\2\u0106\u0107\3\2\2\2\u0107\u0109\5\26\f\2"+
+		"\u0108\u0105\3\2\2\2\u0109\u010c\3\2\2\2\u010a\u0108\3\2\2\2\u010a\u010b"+
+		"\3\2\2\2\u010b\u010d\3\2\2\2\u010c\u010a\3\2\2\2\u010d\u010e\7\5\2\2\u010e"+
+		"\u0112\3\2\2\2\u010f\u0110\7\3\2\2\u0110\u0112\7\5\2\2\u0111\u0102\3\2"+
+		"\2\2\u0111\u010f\3\2\2\2\u0112=\3\2\2\2\u0113\u0114\t\3\2\2\u0114?\3\2"+
+		"\2\2\u0115\u0116\7\26\2\2\u0116A\3\2\2\2!EIORV[`jnqtx\u0084\u0090\u0095"+
+		"\u0098\u00a1\u00aa\u00b9\u00c3\u00cc\u00d6\u00df\u00e3\u00e7\u00e9\u00f9"+
+		"\u0100\u0105\u010a\u0111";
 	public static final ATN _ATN =
 		new ATNDeserializer().deserialize(_serializedATN.toCharArray());
 	static {
