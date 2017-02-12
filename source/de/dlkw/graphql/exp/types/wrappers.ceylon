@@ -1,4 +1,5 @@
 shared interface GQLWrapperType<out Inner, out InnerName>
+    satisfies Named<Null>
     given Inner satisfies GQLType<InnerName>
     given InnerName of String | Null
 {

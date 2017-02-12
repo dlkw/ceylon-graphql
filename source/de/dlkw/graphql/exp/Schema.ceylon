@@ -11,18 +11,18 @@ import ceylon.collection {
 import ceylon.language.meta {
     type
 }
-import ceylon.logging {
-    Logger,
-    logger
-}
 import ceylon.language.meta.declaration {
     FunctionDeclaration
 }
 import ceylon.language.meta.model {
     Attribute,
-    Type,
     Class
 }
+import ceylon.logging {
+    Logger,
+    logger
+}
+
 import de.dlkw.graphql.exp.types {
     GQLObjectType,
     GQLField,
@@ -34,28 +34,113 @@ import de.dlkw.graphql.exp.types {
     Undefined,
     GQLAbstractObjectType,
     GQLScalarType,
-    GQLTypeReference,
-    resolveAllTypeReferences,
     undefined,
     gqlStringType,
     ArgumentDefinition,
-    gqlBooleanType,
     InputCoercing,
     GQLNullableType,
     GQLInterfaceType,
     GQLUnionType,
     TypeResolver,
     GQLAbstractType,
-    GQLInputNonNullType
+    GQLInputNonNullType,
+    GQLWrapperType
 }
 
 Logger log = logger(`package`);
 
-shared class Schema(query_, mutation)
+shared interface TypeRegistry
 {
-    GQLObjectType query_;
+    //shared formal void registerType(GQLType<String> type);
+    shared formal GQLType<String>? lookupType(String name);
+}
+
+shared class Schema(query, mutation)
+    satisfies TypeRegistry
+{
+    "The root type for query operations."
+    GQLObjectType query;
+
+    "The root type for mutation operations."
     shared GQLObjectType? mutation;
 
+    //#####################
+    //# Type registration #
+    //#####################
+
+    "Used during setup to register all occuring types."
+    MutableMap<String, GQLType<String>> types = HashMap<String, GQLType<String>>();
+
+    "Register a type. Recursively descends into Object and wrapper types
+     to register all contained named types."
+    Boolean internalRegisterType(GQLType<String> type) {
+        "Recursively descends into wrapper types to register the
+         contained named types."
+        void regWrapper(GQLWrapperType<GQLType<Anything>, Anything> type)
+        {
+            value inner = type.inner;
+            if (is GQLWrapperType<GQLType<Anything>, Anything> inner) {
+                regWrapper(inner);
+            }
+            assert (is GQLType<String> inner);
+            internalRegisterType(inner);
+        }
+
+        void regAny(GQLType<Anything> type) {
+            if (is GQLWrapperType<Anything,Anything> type) {
+                regWrapper(type);
+            }
+            else {
+                assert (is GQLType<String> type);
+                internalRegisterType(type);
+            }
+        }
+
+        String name = type.name;
+
+        if (name.startsWith("__")) {
+            throw ; // TODO
+        }
+
+        Boolean alreadyRegistered;
+        value registeredType = types[name];
+        if (exists registeredType) {
+            if (!type === registeredType) {
+                throw ; // TODO
+            }
+            log.info("type ``name`` already registered");
+            alreadyRegistered = true;
+        } else {
+            log.info("registering type ``name``");
+            types.put(name, type);
+            alreadyRegistered = false;
+        }
+
+        if (is GQLObjectType type) {
+            for (field in type.fields.items) {
+                for (argumentDefinition in field.arguments) {
+                    regAny(argumentDefinition.item.type);
+                }
+                value fieldType = field.type;
+                regAny(fieldType);
+            }
+            for (interface_ in type.interfaces) {
+                internalRegisterType(interface_);
+            }
+        }
+        else if (is GQLUnionType type) {
+            for (component in type.types) {
+                internalRegisterType(component);
+            }
+        }
+
+        return alreadyRegistered;
+    }
+
+    internalRegisterType(query);
+    if (exists mutation) {
+        internalRegisterType(mutation);
+    }
 
     GQLField introspectionFieldSchema = GQLField {
         name = "__schema";
@@ -75,52 +160,18 @@ shared class Schema(query_, mutation)
             t.name?.equals(name) else false);
         }
     };
-    Map<String, TypeResolver> typeResolvers = emptyMap;
-    TypeResolver unspecificTypeResolver = object satisfies TypeResolver{
-        shared actual GQLObjectType resolveAbstractType(GQLAbstractType abstractType, Object objectValue) => nothing;
-    };
 
     class GQLObjectTypeWrapper(GQLObjectType wrapped)
     extends GQLObjectType(wrapped.name, wrapped.fields.items.chain({introspectionFieldSchema, introspectionFieldType}), {}, wrapped.description)
     {
     }
-    shared GQLObjectType query = GQLObjectTypeWrapper(query_);
+    GQLObjectType query__ = GQLObjectTypeWrapper(query);
 
-    MutableMap<String, GQLObjectType | GQLEnumType> types = HashMap<String, GQLObjectType | GQLEnumType>();
     {GQLObjectType*} allIntrospectionTypes = {
         introspection.typeSchema
         ,
         introspection.typeType
     };
-
-    void internalRegisterType(GQLObjectType | GQLEnumType type)
-    {
-        assert (exists tName = type.name); // FIXME should be necessary
-        log.info("registering type ``tName``");
-        if (tName.startsWith("__")) {
-            throw; // TODO
-        }
-
-        value registeredType = types[tName];
-        if (exists registeredType) {
-            if (!type === registeredType) {
-                throw ; // TODO
-            }
-        }
-        else {
-            types.put(tName, type);
-        }
-
-        if (is GQLObjectType type) {
-            for (field in type.fields.items) {
-                if (is GQLObjectType | GQLEnumType fieldType = field.type) {
-                    internalRegisterType(fieldType);
-                }
-            }
-        }
-    }
-
-    internalRegisterType(query_);
 
     {Element+} mkExistingFirst<Element>({Element*} elements)
     {
@@ -141,19 +192,25 @@ shared class Schema(query_, mutation)
     {GQLType<String>+} registeredTypes = mkExistingFirst(types.items);
     print(registeredTypes);
 
-    shared void registerType(GQLObjectType | GQLEnumType type)
+    shared actual GQLType<String>? lookupType(String name)
     {
-        internalRegisterType(type);
+        return registeredTypes.find((t) => t.name == name);
     }
 
-    shared ExtResult executeRequest(document, operationName=null, rootValue=object{}, executor=normalExecutor)
+    Map<String, TypeResolver> typeResolvers = emptyMap;
+    TypeResolver unspecificTypeResolver = object satisfies TypeResolver{
+        shared actual GQLObjectType? resolveAbstractType(GQLAbstractType abstractType, Object objectValue) => if (is GQLObjectType t = lookupType("OtherType")) then t else null;
+    };
+
+    shared ExtResult executeRequest(document, variableValues = emptyMap, operationName=null, rootValue=object{}, inputDecoder = identity<Object>, executor=normalExecutor)
     {
-        print(allIntrospectionTypes);
-        print(types);
         Document document;
+        Map<String, Anything>? variableValues;
         String? operationName;
 
         Anything rootValue;
+
+        Anything inputDecoder(Object transportValue);
 
         Executor executor;
 
@@ -167,7 +224,7 @@ shared class Schema(query_, mutation)
         }
 
         value errors = ArrayList<GQLError>();
-        value coercedVariables = coerceVariableValues(operationDefinition, map([]), errors);
+        value coercedVariables = coerceVariableValues(operationDefinition, variableValues, inputDecoder, errors);
         if (is QueryError coercedVariables) {
             return ExtResultImplTODO(false, null, errors);
         }
@@ -176,7 +233,7 @@ shared class Schema(query_, mutation)
         Executor topLevelExecutor;
         switch (operationDefinition.type)
         case (OperationType.query) {
-            rootType = query;
+            rootType = query__;
             topLevelExecutor = normalExecutor;
         }
         case (OperationType.mutation) {
@@ -194,19 +251,23 @@ shared class Schema(query_, mutation)
         return ExtResultImplTODO(true, result, errors);
     }
 
-    Map<String, Anything> | QueryError coerceVariableValues(operationDefinition, variableValues, errors)
+    Map<String, Object?> | QueryError coerceVariableValues(operationDefinition, variableValues, inputDecoder, errors)
     {
         OperationDefinition operationDefinition;
-        Map<String, Anything> variableValues;
+        Map<String, Anything>? variableValues;
+        Anything inputDecoder(Object transportValue);
         ListMutator<QueryError> errors;
 
-        variable [<String->Anything>*] coercedValues = [];
+        value varValues = variableValues else emptyMap;
+
+        variable [<String->Object?>*] coercedValues = [];
 
         variable Boolean hasErrors = false;
         for (variableName->variableDefinition in operationDefinition.variableDefinitions) {
-            if (variableValues.defines(variableName)) {
-                value value_ = variableValues[variableName];
-                value providedValue = variableDefinition.type.ddCI(value_);
+            if (varValues.defines(variableName)) {
+                value transportValue = varValues[variableName];
+                value inputValue = if (exists transportValue) then inputDecoder(transportValue) else null;
+                value providedValue = variableDefinition.type.coerceInput(inputValue);
                 if (is CoercionError providedValue) {
                     errors.add(VariableCoercionError(variableName));
                     hasErrors = true;
@@ -235,33 +296,65 @@ shared class Schema(query_, mutation)
         return map(coercedValues);
     }
 
-    Map<String, Anything> | FieldError coerceArgumentValues2(objectType, field, variableValues, errors, path)
+    Map<String, Object?> | FieldError coerceArgumentValues(objectType, field, variableValues, errors, path)
     {
         GQLAbstractObjectType objectType;
         AField field;
-        Map<String, Anything> variableValues;
+        Map<String, Object?> variableValues;
 
         [String, <String|Integer>*] path;
         ListMutator<FieldError> errors;
 
-        variable [<String->Anything>*] coercedValues = [];
+        // 1.
+        variable [<String->Object?>*] coercedValues = [];
 
         value fieldType = objectType.fields[field.name];
         assert (exists fieldType);
 
         variable Boolean hasErrors = false;
+        // 5., a
         for (argumentName->argumentDefinition in fieldType.arguments) {
             if (field.arguments.defines(argumentName)) {
+                //d
                 value value_ = field.arguments[argumentName];
-                value providedValue = argumentDefinition.type.ddCI(value_);
-                if (is CoercionError providedValue) {
-                    errors.add(ArgumentCoercionError(path, argumentName));
-                    hasErrors = true;
-                    continue;
+                if (is Var value_) {
+                    // e
+                    if (variableValues.defines(value_.name)) {
+                        //iii
+                        coercedValues = coercedValues.withLeading(argumentName->variableValues[value_.name]);
+                    }
+                    else {
+                        // iv
+                        value defaultValue = argumentDefinition.defaultValue;
+                        if (is Undefined defaultValue) {
+                            if (is GQLNonNullType<GQLType<Anything>, Anything> argumentType = argumentDefinition.type) {
+                                errors.add(ArgumentCoercionError(path, argumentName));
+                                hasErrors = true;
+                            }
+                            else {
+                                // no entry in coercedValues for this argument
+                            }
+                        }
+                        else {
+                            coercedValues = coercedValues.withLeading(argumentName->defaultValue);
+                        }
+                    }
                 }
-                coercedValues = coercedValues.withLeading(argumentName->providedValue);
+                else {
+                    value providedValue = argumentDefinition.type.coerceInput(value_);
+                    if (is CoercionError providedValue) {
+                        //g
+                        errors.add(ArgumentCoercionError(path, argumentName));
+                        hasErrors = true;
+                    }
+                    else {
+                        //h+i
+                        coercedValues = coercedValues.withLeading(argumentName->providedValue);
+                    }
+                }
             }
             else {
+                //f
                 value defaultValue = argumentDefinition.defaultValue;
                 if (is Undefined defaultValue) {
                     if (is GQLNonNullType<GQLType<Anything>, Anything> argumentType = argumentDefinition.type) {
@@ -287,7 +380,7 @@ shared class Schema(query_, mutation)
         [Selection+] selectionSet;
         GQLAbstractObjectType objectType;
         Anything objectValue;
-        Map<String, Anything> variableValues;
+        Map<String, Object?> variableValues;
 
         FragmentDefinition? lookupFragmentDefinition(String name);
         ListMutator<FieldError> errors;
@@ -320,7 +413,7 @@ shared class Schema(query_, mutation)
             }
 
             if (topLevel && (fieldName == "__schema" || fieldName == "__type")) {
-                usedObjectValue = IntrospectionSupport(registeredTypes, query, mutation, []);
+                usedObjectValue = IntrospectionSupport(registeredTypes, query__, mutation, []);
             }
             else {
                 usedObjectValue = objectValue;
@@ -431,7 +524,7 @@ shared class Schema(query_, mutation)
         Anything objectValue;
         GQLType<String?> fieldType;
         [AField+] fields;
-        Map<String, Anything> variableValues;
+        Map<String, Object?> variableValues;
 
         FragmentDefinition? lookupFragmentDefinition(String name);
         ListMutator<FieldError> errors;
@@ -443,7 +536,7 @@ shared class Schema(query_, mutation)
 
         AField field = fields.first;
 
-        value argumentValues = coerceArgumentValues2(objectType, field, variableValues, errors, path);
+        value argumentValues = coerceArgumentValues(objectType, field, variableValues, errors, path);
         if (is FieldError argumentValues) {
             return null;
         }
@@ -457,7 +550,7 @@ shared class Schema(query_, mutation)
         GQLAbstractObjectType objectType;
         Anything objectValue;
         String fieldName;
-        Map<String, Anything> argumentValues;
+        Map<String, Object?> argumentValues;
 
         ListMutator<FieldError> errors;
         [String, <String|Integer>*] path;
@@ -497,7 +590,7 @@ shared class Schema(query_, mutation)
         GQLType<String?> fieldType;
         [AField+] fields;
         Anything result;
-        Map<String, Anything> variableValues;
+        Map<String, Object?> variableValues;
 
         FragmentDefinition? lookupFragmentDefinition(String name);
         ListMutator<FieldError> errors;
@@ -531,7 +624,7 @@ shared class Schema(query_, mutation)
         GQLType<String?> fieldType;
         [AField+] fields;
         Anything result;
-        Map<String, Anything> variableValues;
+        Map<String, Object?> variableValues;
 
         FragmentDefinition? lookupFragmentDefinition(String name);
         Boolean inNonNull;

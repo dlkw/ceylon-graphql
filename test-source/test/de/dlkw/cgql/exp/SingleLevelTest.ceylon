@@ -40,7 +40,7 @@ shared void singleIntMayBeNullAndIsNotNull() {
 
     value document = Document([OperationDefinition(OperationType.query, [Field("f1")])]);
 
-    value result = schema.executeRequest(document, null, map({"f1"->5}));
+    value result = schema.executeRequest(document, null, null, map({"f1"->5}));
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);

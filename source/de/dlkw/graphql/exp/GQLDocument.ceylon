@@ -18,14 +18,13 @@ shared class Document(definitions)
     value operationDefinitions = definitions.narrow<OperationDefinition>();
     value fragmentDefinitions = definitions.narrow<FragmentDefinition>();
 
-    variable value operationCount = 0;
-    variable value firstOperationIsUnnamed = false;
+    variable value unnamedOperationFound = false;
     for (operationDefinition in operationDefinitions) {
-        if (++operationCount == 1) {
-            firstOperationIsUnnamed = operationDefinition.name is Null;
-        }
-        else {
-            assert (operationDefinition.name exists && firstOperationIsUnnamed);
+        if (operationDefinition.name is Null) {
+            if (unnamedOperationFound) {
+                throw AssertionError("more than one unnamed operation in document");
+            }
+            unnamedOperationFound = true;
         }
     }
 
@@ -57,11 +56,11 @@ shared class OperationDefinition(type, selectionSet, name = null, variableDefini
 }
 
 
-shared class VariableDefinition<Value, out TypeName>(type, defaultValue = undefined)
+shared class VariableDefinition<out Value, out TypeName>(type, defaultValue = undefined)
     given Value satisfies Object
     given TypeName of String | Null
 {
-    shared GQLType<TypeName> & InputCoercing<TypeName, Object, Nothing> type;
+    shared GQLType<TypeName> & InputCoercing<TypeName, Value, Nothing> type;
     shared Value?|Undefined defaultValue;
 }
 
@@ -156,4 +155,24 @@ Document doci()
                 selectionSet = [Field("f2")];
     }])]);
     return doc;
+}
+
+shared alias InputValue => SVal | IVal | FVal | NVal | BVal | EVal | LVal | OVal;
+shared abstract class Vall<V, T>(shared T v) of V
+given V of SVal | IVal | FVal | NVal | BVal | EVal | LVal | OVal
+{}
+
+shared class SVal(String val) extends Vall<SVal, String>(val){}
+shared class IVal(Integer val) extends Vall<IVal, Integer>(val){}
+shared class FVal(Float val) extends Vall<FVal, Float>(val){}
+shared class NVal() extends Vall<NVal, Null>(null){}
+shared class BVal(Boolean val) extends Vall<BVal, Boolean>(val){}
+shared class EVal(String val) extends Vall<EVal, String>(val){}
+shared class LVal({InputValue*} val) extends Vall<LVal, {InputValue*}>(val){}
+shared class OVal(Map<String, InputValue> val) extends Vall<OVal, Map<String, InputValue>>(val){}
+
+
+shared class Var(name)
+{
+    shared String name;
 }

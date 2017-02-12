@@ -59,7 +59,7 @@ shared class GQLField(name, type, description=null, arguments=emptyMap, deprecat
     shared Map<String, ArgumentDefinition<Object>> arguments;
     "Optional resolver for a field in an object. First parameter is the object value of the object
      containing the field to resolve, second the field's argument values"
-    shared Anything(Anything, Map<String, Anything>)? resolver;
+    shared Object?(Anything, Map<String, Object?>)? resolver;
 
     assertGQLName(name);
 
@@ -187,7 +187,7 @@ extends GQLAbstractType(TypeKind.union, name, description)
 
 shared interface TypeResolver
 {
-    shared formal GQLObjectType resolveAbstractType(GQLAbstractType abstractType, Object objectValue);
+    shared formal GQLObjectType? resolveAbstractType(GQLAbstractType abstractType, Object objectValue);
 }
 
 GQLField duplicateDetector(GQLField earlier, GQLField later) {

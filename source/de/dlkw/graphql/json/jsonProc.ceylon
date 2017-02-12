@@ -22,7 +22,9 @@ import de.dlkw.graphql.exp {
     FieldError,
     GQLError,
     QueryError,
-    Argument
+    Argument,
+    VariableDefinition,
+    Var
 }
 import de.dlkw.graphql.exp.types {
     GQLNonNullType,
@@ -38,9 +40,9 @@ import de.dlkw.graphql.exp.types {
     GQLInputNonNullType
 }
 
-JsonObject exe(Document doc, Schema schema, Anything rootValue)
+shared JsonObject executeRequest(Document doc, String? operationName, JsonObject? variableValues, Schema schema, Anything rootValue)
 {
-    value res = schema.executeRequest(doc, null, rootValue);
+    value res = schema.executeRequest(doc, variableValues, operationName, rootValue);
     print(res.data);
     if (res.includedExecution) {
         if (exists errors = res.errors) {
@@ -115,7 +117,7 @@ shared void run()
                     }
                 )))
             });
-            resolver = (Anything x, Map<String, Anything> y)
+            resolver = (Anything x, Map<String, Object?> y)
             {
                 return y["inpObj"];
             };
@@ -179,10 +181,16 @@ shared void run()
         GQLField{
                 name="enum";
                 type=GQLEnumType{"Enum1";
-                        GQLEnumValue{"V1";"5";"descr";true;"Deprecation Reason";},
-                        GQLEnumValue("V2")
+                        [GQLEnumValue<>{"V1";"5";"descr";true;"Deprecation Reason";},
+                        GQLEnumValue<>("V2")];
                 };
                 description="descrEnum";
+        },
+        GQLField{
+            name="withIntArg";
+            type=gqlIntType;
+            arguments = map({"intArg"->ArgumentDefinition(gqlIntType, Var("intVar"))});
+            resolver=(v, m)=>m.get("intArg");
         }
     });
 
@@ -191,12 +199,15 @@ shared void run()
     value doc = inputTest();
 
     value rv = map({"fA"->5, "fC"->map({"sub1"->19, "sub2"->map({"subsub21"->6, "subsub22"->16})}), "nicks"->[map({"n1"->1}), map({"n1"->424}), map({"n1"-> 3})], "enum"->"5"});
-    print(exe(doc, schema, rv));
+
+    JsonObject vars = JsonObject({"intVar"->8});
+    print(executeRequest(doc, null, vars, schema, rv));
 }
 Document inputTest()
 {
     return Document([
         OperationDefinition(OperationType.query, [
+            /*
             Field{"obj";
                 arguments_=[
                     Argument("inpObj", map({"of1s1"->5}))//, "b"->"BBB", "c"->true}))
@@ -205,8 +216,13 @@ Document inputTest()
                 selectionSet = [
                     Field("of1s1")
                 ];
-            }
-        ])
+            },*/
+            Field{"withIntArg";arguments_=[Argument("intArg", Var("intVar"))];}
+        ],
+        null,
+            {
+            "intVar" -> VariableDefinition(gqlIntType)
+            })
     ]);
 }
 Document introType()

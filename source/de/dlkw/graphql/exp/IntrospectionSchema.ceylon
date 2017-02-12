@@ -108,7 +108,7 @@ object introspection
         fields_ = {
             GQLField {
                 name = "kind";
-                type = GQLNonNullType(GQLEnumType("__TypeKind", {
+                type = GQLNonNullType(GQLEnumType("__TypeKind", [
                     GQLEnumValue("SCALAR", TypeKind.scalar),
                     GQLEnumValue("OBJECT", TypeKind.\iobject),
                     GQLEnumValue("INTERFACE", TypeKind.\iinterface),
@@ -117,7 +117,7 @@ object introspection
                     GQLEnumValue("INPUT_OBJECT", TypeKind.inputObject),
                     GQLEnumValue("LIST", TypeKind.list),
                     GQLEnumValue("NON_NULL", TypeKind.nonNull)
-                }));
+                ]));
             },
             GQLField {
                 name = "name";
@@ -192,14 +192,14 @@ object introspection
             },
             GQLField {
                 name = "locations";
-                type = GQLNonNullType<GQLListType<GQLNonNullType<GQLEnumType, String>, Null>, Null>(GQLListType(GQLNonNullType(GQLEnumType("__DirectiveLocation", {
-                    GQLEnumValue("QUERY"),
-                    GQLEnumValue("MUTATION"),
-                    GQLEnumValue("FIELD"),
-                    GQLEnumValue("FRAGMENT_DEFINITION"),
-                    GQLEnumValue("FRAGMENT_SPREAD"),
-                    GQLEnumValue("INLINE_FRAGMENT")
-                }))));
+                type = GQLNonNullType<GQLListType<GQLNonNullType<GQLEnumType<>, String>, Null>, Null>(GQLListType(GQLNonNullType(GQLEnumType<>("__DirectiveLocation", [
+                    GQLEnumValue<>("QUERY"),
+                    GQLEnumValue<>("MUTATION"),
+                    GQLEnumValue<>("FIELD"),
+                    GQLEnumValue<>("FRAGMENT_DEFINITION"),
+                    GQLEnumValue<>("FRAGMENT_SPREAD"),
+                    GQLEnumValue<>("INLINE_FRAGMENT")
+                ]))));
             },
             GQLField {
                 name = "args";

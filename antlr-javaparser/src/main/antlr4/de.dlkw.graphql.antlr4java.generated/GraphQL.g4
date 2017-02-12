@@ -41,7 +41,7 @@ definition
    ;
 
 operationDefinition
-   : selectionSet | operationType name variableDefinitions? directives? selectionSet
+   : selectionSet | operationType name? variableDefinitions? directives? selectionSet
    ;
 
 selectionSet

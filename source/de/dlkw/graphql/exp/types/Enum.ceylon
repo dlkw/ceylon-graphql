@@ -1,15 +1,16 @@
-shared class GQLEnumType(name_, values, description = null)
+shared class GQLEnumType<Value=String>(name_, values, description = null)
     extends GQLNullableType<String>(TypeKind.enum, name_, description)
-    satisfies ResultCoercing<String, String, Object> & InputCoercing<String, String, Object>
+    satisfies ResultCoercing<String, String, Value> & InputCoercing<String, Value, String>
+    given Value satisfies Object
 {
     String name_;
     String? description;
-    {GQLEnumValue+} values;
+    [GQLEnumValue<Value>+] values;
 
-    shared actual String | CoercionError doCoerceResult(Object value_)
+    shared actual String | CoercionError doCoerceResult(Value value_)
     {
         print(value_);
-        value r = values.find((el){print("scan ``el``, ``el.value_``");return el.value_ == value_;});
+        value r = values.find((el){print("scan ``el``, ``el.value_ else "<null>"``");return el.value_ == value_;});
         if (exists r) {
             return r.name;
         }
@@ -17,26 +18,36 @@ shared class GQLEnumType(name_, values, description = null)
     }
 
     // TODO support variable parsing as tokens instead of strings
-    shared actual String doCoerceInput(Object input) => nothing;
+    shared actual Value | CoercionError doCoerceInput(String input) => values.find((v) => v.name == input)?.value_ else CoercionError("no value ``input``");
 
     "Alias for [[values]] to provide the key/value pair in the GraphQL introspection type."
-    shared {GQLEnumValue+} enumValues => values;
+    shared {GQLEnumValue<Value>+} enumValues => values;
     shared actual Boolean isSameTypeAs(GQLType<Anything> other) => this === other;
 
     shared actual String wrappedName => name_;
 
 }
 
-shared class GQLEnumValue(name, value__ =null, description=null, deprecated=false, deprecationReason=null)
+shared class GQLEnumValue<Value=String>(name, value__=null, description=null, deprecated=false, deprecationReason=null)
+    given Value satisfies Object
 {
     shared String name;
     assertGQLName(name);
     assert (name != "true" && name != "false" && name != "null");
 
-    Anything value__;
-    //value tmp = if (exists value__) then value__ else if (is Value name) then name else null;
-    value tmp = if (exists value__) then value__ else name;
-    shared Object value_ = tmp;
+    Value? value__;
+    Value tmp;
+    if (exists value__) {
+        tmp = value__;
+    }
+    else if (is Value name) {
+        tmp = name;
+    }
+    else {
+        throw AssertionError("need to specify a value for non-string enums");
+    }
+
+    shared Value value_ = tmp;
 
     shared String? description;
     shared Boolean deprecated;

@@ -3,28 +3,43 @@ import ceylon.test {
     assertEquals,
     assertNull,
     assertTrue,
-    assertFalse
+    assertFalse,
+    fail
 }
 
 import de.dlkw.graphql.antlr4java {
     parseDocument,
-    ParseError,
-    Val,
-    Var
+    ParseError
 }
 import de.dlkw.graphql.exp {
     OperationType,
     AField,
     FragmentDefinition,
     FragmentSpread,
-    InlineFragment
+    InlineFragment,
+    Var,
+    Schema
 }
+import de.dlkw.graphql.exp.types {
+    gqlIntType,
+    gqlStringType,
+    Undefined,
+    GQLField,
+    GQLObjectType,
+    ArgumentDefinition,
+    GQLEnumType,
+    GQLEnumValue,
+    GQLInputObjectType,
+    GQLInputField
+}
+
+Schema simplestSchema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType)}), null);
 
 test
 shared void testAnonymousQuery()
 {
     String doc = "{ f }";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -39,7 +54,7 @@ test
 shared void testNamedQuery()
 {
     String doc = "query q { f }";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -55,7 +70,7 @@ test
 shared void testNamedQueryByName()
 {
     String doc = "query q { f }";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -68,10 +83,25 @@ shared void testNamedQueryByName()
 }
 
 test
+shared void testAnonymousQueryWithKeyword()
+{
+    String doc = "query { f }";
+    value parsedDoc = parseDocument(doc, simplestSchema);
+    if (is ParseError parsedDoc) {
+        print(parsedDoc.errorInfos);
+        throw;
+    }
+
+    assert (exists op = parsedDoc.operationDefinition(null));
+    assert (is Null name = op.name);
+    assertEquals(op.type, OperationType.query);
+}
+
+test
 shared void testNamedMutation()
 {
     String doc = "mutation q { f }";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -87,7 +117,7 @@ test
 shared void testFieldNoAlias()
 {
     String doc = "{ f }";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -104,7 +134,7 @@ test
 shared void testFieldWithAlias()
 {
     String doc = "{ a:f }";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -121,7 +151,7 @@ test
 shared void testFieldWithSubfield()
 {
     String doc = "{a:f{s}}";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -137,7 +167,7 @@ test
 shared void testFieldWithStringArgumentNamedNull()
 {
     String doc = "{f(null:\"o8\")}";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -145,15 +175,15 @@ shared void testFieldWithStringArgumentNamedNull()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (is Val a = f.arguments["null"]);
-    assertEquals(a.val, "o8");
+    assert (is String a = f.arguments["null"]);
+    assertEquals(a, "o8");
 }
 
 test
 shared void testFieldWithNullArgument()
 {
     String doc = "{f(a:null)}";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -161,15 +191,15 @@ shared void testFieldWithNullArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (is Val a = f.arguments.get("a"));
-    assertNull(a.val);
+    assert (is Null a = f.arguments.get("a"));
+    assertNull(a);
 }
 
 test
 shared void testFieldWithTrueArgument()
 {
     String doc = "{f(a:true)}";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -177,15 +207,15 @@ shared void testFieldWithTrueArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (is Val a = f.arguments["a"]);
-    assertEquals(a.val, true);
+    assert (is Boolean a = f.arguments["a"]);
+    assertEquals(a, true);
 }
 
 test
 shared void testFieldWithFalseArgument()
 {
     String doc = "{f(a:false)}";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -193,15 +223,15 @@ shared void testFieldWithFalseArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (is Val a = f.arguments["a"]);
-    assertEquals(a.val, false);
+    assert (is Boolean a = f.arguments["a"]);
+    assertEquals(a, false);
 }
 
 test
 shared void testFieldWithEnumArgument()
 {
     String doc = "{f(true:boing)}";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -209,15 +239,15 @@ shared void testFieldWithEnumArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (is Val a = f.arguments["true"]);
-    assertEquals(a.val, "boing");
+    assert (is String a = f.arguments["true"]);
+    assertEquals(a, "boing");
 }
 
 test
 shared void testFieldWithIntArgument()
 {
     String doc = "{f(true:5)}";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -225,16 +255,15 @@ shared void testFieldWithIntArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (is Val a = f.arguments["true"]);
-    assert (is Integer b = a.val);
-    assertEquals(a.val, 5);
+    assert (is Integer a = f.arguments["true"]);
+    assertEquals(a, 5);
 }
 
 test
 shared void testFieldWithFloatArgument()
 {
     String doc = "{f(true:5.1)}";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -242,15 +271,15 @@ shared void testFieldWithFloatArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (is Val a = f.arguments["true"]);
-    assertEquals(a.val, 5.1);
+    assert (is Float a = f.arguments["true"]);
+    assertEquals(a, 5.1);
 }
 
 test
 shared void testFieldWithListArgument()
 {
     String doc = "{f(true:[3, $vv, \"4\"])}";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -258,22 +287,21 @@ shared void testFieldWithListArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (is Val a = f.arguments["true"]);
-    assert (is Sequence<Val|Var> s = a.val);
-    assertEquals(s.size, 3);
-    assert (is Val e0 = s[0]);
-    assertEquals(e0.val, 3);
-    assert (is Var e1 = s[1]);
+    assert (is Sequence<Var|Anything> a = f.arguments["true"]);
+    assertEquals(a.size, 3);
+    assert (is Integer e0 = a[0]);
+    assertEquals(e0, 3);
+    assert (is Var e1 = a[1]);
     assertEquals(e1.name, "vv");
-    assert (is Val e2 = s[2]);
-    assertEquals(e2.val, "4");
+    assert (is String e2 = a[2]);
+    assertEquals(e2, "4");
 }
 
 test
 shared void testFieldWithObjectArgument()
 {
     String doc = "{f(true:{s:\"v\", ff:$vvv})}";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -281,13 +309,12 @@ shared void testFieldWithObjectArgument()
 
     assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (is Val a = f.arguments["true"]);
-    assert (is Map<> m = a.val);
-    assertEquals(m.size, 2);
-    value s = m.get("s");
-    assert (is Val s);
-    assertEquals(s.val, "v");
-    value ff = m.get("ff");
+    assert (is Map<> a = f.arguments["true"]);
+    assertEquals(a.size, 2);
+    value s = a.get("s");
+    assert (is String s);
+    assertEquals(s, "v");
+    value ff = a.get("ff");
     assert (is Var ff);
     assertEquals(ff.name, "vvv");
 }
@@ -296,7 +323,7 @@ test
 shared void testFragmentDefinition()
 {
     String doc = "fragment fr on t { f1 }";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -314,7 +341,7 @@ test
 shared void testFragmentSpread()
 {
     String doc = "{ ... fs }";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -328,7 +355,7 @@ test
 shared void testInlineFragment()
 {
     String doc = "{ ... {sf1}}";
-    value parsedDoc = parseDocument(doc);
+    value parsedDoc = parseDocument(doc, simplestSchema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);
         throw;
@@ -338,4 +365,158 @@ shared void testInlineFragment()
     assertNull(inl.typeCondition);
     assert (is AField sf1 = inl.selectionSet.first);
     assertEquals(sf1.name, "sf1");
+}
+
+test
+shared void testIntVariableWithDefaultValue()
+{
+    Schema varSchema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType, null, map({"a"->ArgumentDefinition(gqlIntType)}))}), null);
+    String doc = "query ($v1:Int=4){f(a:$v)}";
+    value parsedDoc = parseDocument(doc, varSchema);
+    if (is ParseError parsedDoc) {
+        print(parsedDoc.errorInfos);
+        throw;
+    }
+
+    assert (exists vd = parsedDoc.operationDefinition(null)?.variableDefinitions);
+    assertEquals(vd.size, 1);
+    assert (exists varDef = vd.get("v1"));
+    assertEquals(varDef.type, gqlIntType);
+    assertEquals(varDef.defaultValue, 4);
+}
+
+test
+shared void testIntVariableWithoutDefaultValue()
+{
+    Schema varSchema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType, null, map({"a"->ArgumentDefinition(gqlIntType)}))}), null);
+    String doc = "query ($v1:Int){f(a:$v)}";
+    value parsedDoc = parseDocument(doc, varSchema);
+    if (is ParseError parsedDoc) {
+        print(parsedDoc.errorInfos);
+        throw;
+    }
+
+    assert (exists vd = parsedDoc.operationDefinition(null)?.variableDefinitions);
+    assertEquals(vd.size, 1);
+    assert (exists varDef = vd.get("v1"));
+    assertEquals(varDef.type, gqlIntType);
+    assert (is Undefined default_ = varDef.defaultValue);
+}
+
+test
+shared void testIntVariableWithNullDefaultValue()
+{
+    Schema varSchema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType, null, map({"a"->ArgumentDefinition(gqlIntType)}))}), null);
+    String doc = "query ($v1:Int=null){f(a:$v)}";
+    value parsedDoc = parseDocument(doc, varSchema);
+    if (is ParseError parsedDoc) {
+        print(parsedDoc.errorInfos);
+        throw;
+    }
+
+    assert (exists vd = parsedDoc.operationDefinition(null)?.variableDefinitions);
+    assertEquals(vd.size, 1);
+    assert (exists varDef = vd.get("v1"));
+    assertEquals(varDef.type, gqlIntType);
+    assert (is Null default_ = varDef.defaultValue);
+}
+
+test
+shared void testStringVariable()
+{
+    String doc = "query ($v1:String=\"k\"){f(a:$v)}";
+    value parsedDoc = parseDocument(doc, simplestSchema);
+    if (is ParseError parsedDoc) {
+        print(parsedDoc.errorInfos);
+        throw;
+    }
+
+    assert (exists vd = parsedDoc.operationDefinition(null)?.variableDefinitions);
+    assertEquals(vd.size, 1);
+    assert (exists varDef = vd.get("v1"));
+    assertEquals(varDef.type, gqlStringType);
+    assertEquals(varDef.defaultValue, "k");
+}
+
+test
+shared void testStringEnumVariableWithIllegalDefaultValue()
+{
+    value enumType = GQLEnumType("Testenum", [GQLEnumValue<>("k")]);
+    Schema varSchema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType, null, map({"e"->ArgumentDefinition(enumType)}))}), null);
+    String doc = "query ($v1:Testenum=popop){f(a:$v)}";
+    try {
+        value parsedDoc = parseDocument(doc, varSchema);
+        if (is ParseError parsedDoc) {
+            print(parsedDoc.errorInfos);
+            throw ;
+        }
+        fail("exception expected");
+    }
+    catch (AssertionError e) {
+        assert (e.message.startsWith("illegal default value <popop>"));
+    }
+}
+
+test
+shared void testStringEnumVariable()
+{
+    value enumType = GQLEnumType("Testenum", [GQLEnumValue<>("k")]);
+    Schema varSchema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType, null, map({"e"->ArgumentDefinition(enumType)}))}), null);
+    String doc = "query ($v1:Testenum=k){f(a:$v)}";
+    value parsedDoc = parseDocument(doc, varSchema);
+    if (is ParseError parsedDoc) {
+        print(parsedDoc.errorInfos);
+        throw;
+    }
+
+    assert (exists vd = parsedDoc.operationDefinition(null)?.variableDefinitions);
+    assertEquals(vd.size, 1);
+    assert (exists varDef = vd.get("v1"));
+    assertEquals(varDef.type, enumType);
+    assertEquals(varDef.defaultValue, "k");
+}
+
+class E of kk|kl
+{
+    shared new kk{}
+    shared new kl{}
+}
+
+test
+shared void testEnumEnumVariable()
+{
+    value enumType = GQLEnumType<E>("Testenum", [GQLEnumValue("k", E.kk), GQLEnumValue("l", E.kl)]);
+    Schema varSchema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType, null, map({"e"->ArgumentDefinition(enumType)}))}), null);
+    String doc = "query ($v1:Testenum=k){f(e:$v1)}";
+    value parsedDoc = parseDocument(doc, varSchema);
+    if (is ParseError parsedDoc) {
+        print(parsedDoc.errorInfos);
+        throw;
+    }
+
+    assert (exists vd = parsedDoc.operationDefinition(null)?.variableDefinitions);
+    assertEquals(vd.size, 1);
+    assert (exists varDef = vd.get("v1"));
+    assertEquals(varDef.type, enumType);
+    assertEquals(varDef.defaultValue, E.kk);
+}
+
+test
+shared void testObjectVariable()
+{
+    value enumType = GQLEnumType<E>("Testenum", [GQLEnumValue("k", E.kk), GQLEnumValue("l", E.kl)]);
+    value inObjType = GQLInputObjectType("TestInObj", [GQLInputField("k", gqlStringType), GQLInputField("l", enumType)]);
+    Schema varSchema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType, null, map({"e"->ArgumentDefinition(enumType)}))}), null);
+    String doc = "query ($v1:Testenum=k){f(e:$v1)}";
+    value parsedDoc = parseDocument(doc, varSchema);
+    if (is ParseError parsedDoc) {
+        print(parsedDoc.errorInfos);
+        throw;
+    }
+
+    assert (exists vd = parsedDoc.operationDefinition(null)?.variableDefinitions);
+    assertEquals(vd.size, 1);
+    assert (exists varDef = vd.get("v1"));
+    assertEquals(varDef.type, enumType);
+    assertEquals(varDef.defaultValue, E.kk);
 }

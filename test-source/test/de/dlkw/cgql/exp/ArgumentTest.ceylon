@@ -10,7 +10,10 @@ import de.dlkw.graphql.exp {
     OperationDefinition,
     Field,
     OperationType,
-    Argument
+    Argument,
+    VariableDefinition,
+    Var,
+    IVal
 }
 import de.dlkw.graphql.exp.types {
     GQLObjectType,
@@ -120,4 +123,32 @@ shared void intArgumentWithoutDefault() {
     assert (exists data = result.data);
     assertTrue(data.defines("f1"));
     assert (is Null f1 = data["f1"]);
+}
+
+test
+shared void intArgumentWithVariable() {
+    value queryRoot = GQLObjectType("queryRoot", {
+        GQLField {
+            name = "f1";
+            type = gqlIntType;
+            arguments = map({
+                "arg1"->ArgumentDefinition(gqlIntType, undefined)
+            });
+            resolver = (a, e) => e["arg1"];
+        }
+    });
+
+    value schema = Schema(queryRoot, null);
+
+    value document = Document([OperationDefinition(OperationType.query, [Field("f1", null, [Argument("arg1", Var("var1"))])], null,
+        {"var1"->VariableDefinition(gqlIntType, 3)}
+    )]);
+
+    value result = schema.executeRequest(document);
+    assertTrue(result.includedExecution);
+
+    assert (exists data = result.data);
+    assertTrue(data.defines("f1"));
+    assert (is Integer f1 = data["f1"]);
+    assertEquals(f1, 3);
 }

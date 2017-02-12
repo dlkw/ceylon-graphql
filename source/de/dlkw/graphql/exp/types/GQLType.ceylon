@@ -75,7 +75,7 @@ shared interface InputCoercing<out Name, out Coerced, in Input = Coerced>
      according to the GraphQL input coercion rules."
     shared formal Coerced | CoercionError doCoerceInput(Input input);
 
-    shared Coerced? | CoercionError ddCI(Anything input)
+    shared Coerced? | CoercionError coerceInput(Anything input)
     {
         if (is Null input) {
             return null;
@@ -83,6 +83,10 @@ shared interface InputCoercing<out Name, out Coerced, in Input = Coerced>
 
         if (is Input input) {
             return doCoerceInput(input);
+        }
+
+        if (is Coerced input) {
+            return input;
         }
 
         String effName = (name else type(this).string) of String;

@@ -17,7 +17,8 @@ import de.dlkw.graphql.exp {
     Schema,
     FragmentDefinition,
     InlineFragment,
-    FragmentSpread
+    FragmentSpread,
+    Selection
 }
 import de.dlkw.graphql.exp.types {
     gqlIntType,
@@ -27,6 +28,7 @@ import de.dlkw.graphql.exp.types {
     gqlStringType,
     GQLNonNullType
 }
+
 test
 shared void implementsAll() {
     addLogWriter(writeSimpleLog);
@@ -58,7 +60,7 @@ shared void implementsAll() {
 
     value document2 = Document([FragmentDefinition("frag1", [Field("f4")], "QueryRoot"), OperationDefinition(OperationType.query, [InlineFragment([Field("f1")]), FragmentSpread("frag1")])]);
 
-    value result = schema.executeRequest(document2, null, map({"f1"->"s"}));
+    value result = schema.executeRequest(document2, null, null, map({"f1"->"s"}));
 
     assertTrue(result.includedExecution);
     assert (exists data = result.data);
@@ -67,4 +69,39 @@ shared void implementsAll() {
     assertEquals(data.size, 1);
     assert (is String f1 = data["f1"]);
     assertEquals(f1, "s");
+}
+
+test
+shared void implementingOtherType() {
+    addLogWriter(writeSimpleLog);
+
+    value iface1 = GQLInterfaceType("if1", {
+        GQLField("i1", gqlStringType)
+    });
+
+    value queryRoot = GQLObjectType("QueryRoot", {
+        GQLField {
+            name = "f1";
+                    iface1;
+        }
+    });
+
+    value otherType = GQLObjectType("OtherType", { GQLField{name="i1";type=gqlStringType;}, GQLField{name="o2";type=gqlIntType;}}, {iface1});
+
+    value schema = Schema(queryRoot, null);
+    //schema.registerType(otherType);
+
+    value document = Document([OperationDefinition(OperationType.query, [Field("f1", null, null, null, [Field("i1"), InlineFragment([Field("o2")], "OtherType")])])]);
+
+    value result = schema.executeRequest(document, null, null, map({"f1"->map({"i1"->"s", "o2"->5})}));
+
+    assertTrue(result.includedExecution);
+    assert (exists data = result.data);
+    assertNull(result.errors);
+
+    assertEquals(data.size, 1);
+    assert (is Map<Anything, Anything> f1 = data["f1"]);
+    assertEquals(f1.size, 2);
+    assert (is String i1 = f1["i1"]);
+    assert (is Integer o2 = f1["o2"]);
 }

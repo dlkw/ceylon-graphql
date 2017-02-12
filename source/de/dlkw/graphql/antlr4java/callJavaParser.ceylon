@@ -13,7 +13,10 @@ import de.dlkw.graphql.exp {
     FragmentDefinition,
     Field,
     Argument,
-    DocumentScalarValue
+    DocumentScalarValue,
+    Var,
+    VariableDefinition,
+    Schema
 }
 
 import java.util {
@@ -23,9 +26,20 @@ import java.util {
 import ceylon.language.meta {
     type
 }
+import de.dlkw.graphql.exp.types {
+    gqlIntType,
+    InputCoercing,
+    GQLObjectType,
+    GQLField,
+    gqlStringType,
+    undefined,
+    Undefined,
+    CoercionError
+}
 
 shared void run() {
-    value result = parseDocument("query\n  1 xuu @a { i:y(i:6) @f { jj:z 2 ... on O{zz}} } fragment a on C { b }");
+    Schema simplestSchema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType)}), null);
+    value result = parseDocument("query\n  1 xuu @a { i:y(i:6) @f { jj:z 2 ... on O{zz}} } fragment a on C { b }", simplestSchema);
     if (is ParseError result) {
         print("\n".join(result.errorInfos));
     }
@@ -34,7 +48,7 @@ shared void run() {
     }
 }
 
-shared Document|ParseError parseDocument(String documentString)
+shared Document|ParseError parseDocument(String documentString, Schema schema)
 {
     GraphQLP p = GraphQLP();
 
@@ -47,7 +61,7 @@ shared Document|ParseError parseDocument(String documentString)
         assert (nonempty errorInfos);
         return ParseError(errorInfos);
     }
-    return createDocument(dc);
+    return createDocument(dc, schema);
 }
 
 shared class ParseError(shared [ErrorInfo+] errorInfos){}
@@ -56,9 +70,9 @@ shared class ErrorInfo(shared String message, shared Integer line, shared Intege
     string => "l``line``c``charPositionInLine``: ``message``";
 }
 
-Document createDocument(GraphQLParser.DocumentContext documentContext)
+Document createDocument(GraphQLParser.DocumentContext documentContext, Schema schema)
 {
-    return Document(createDefinitions(documentContext.definition()));
+    return Document(createDefinitions(documentContext.definition(), schema));
 /*
     shared actual IOperationDefinition? operationDefinition(String? name)
     {
@@ -78,12 +92,12 @@ Document createDocument(GraphQLParser.DocumentContext documentContext)
 */
 }
 
-[OperationDefinition | FragmentDefinition*] createDefinitions(JList<GraphQLParser.DefinitionContext> definitionContexts)
+[OperationDefinition | FragmentDefinition*] createDefinitions(JList<GraphQLParser.DefinitionContext> definitionContexts, Schema schema)
 {
-    return { for (definitionContext in definitionContexts) if (exists oc = definitionContext.operationDefinition()) then createOperationDefinition(oc) else createFragmentDefinition(definitionContext.fragmentDefinition())}.sequence();
+    return { for (definitionContext in definitionContexts) if (exists oc = definitionContext.operationDefinition()) then createOperationDefinition(oc, schema) else createFragmentDefinition(definitionContext.fragmentDefinition())}.sequence();
 }
 
-OperationDefinition createOperationDefinition(GraphQLParser.OperationDefinitionContext operationDefinitionContext)
+OperationDefinition createOperationDefinition(GraphQLParser.OperationDefinitionContext operationDefinitionContext, Schema schema)
 {
     String? name = operationDefinitionContext.name()?.text;
     value parsedOperationType = operationDefinitionContext.operationType();
@@ -91,9 +105,11 @@ OperationDefinition createOperationDefinition(GraphQLParser.OperationDefinitionC
         then OperationType.query
         else (parsedOperationType.text == "query" then OperationType.query else OperationType.mutation);
 
+    value variableDefinitions = createVariableDefinitions(operationDefinitionContext.variableDefinitions(), schema);
+
     value directives = createDirectives(operationDefinitionContext.directives());
     value selectionSet = createSelectionSet(operationDefinitionContext.selectionSet());
-    return OperationDefinition(type, selectionSet, name);
+    return OperationDefinition(type, selectionSet, name, variableDefinitions);
 }
 
 Selection createSelection(GraphQLParser.SelectionContext selCtx)
@@ -108,78 +124,60 @@ Selection createSelection(GraphQLParser.SelectionContext selCtx)
     return createInlineFragment(inlineFragmentCtx);
 }
 
+Anything | Var convertValueOrVariable(GraphQLParser.ValueOrVariableContext valueOrVariableContext) {
+    if (exists var = valueOrVariableContext.variable()) {
+        return Var(var.name().text);
+    }
+    assert (exists val = valueOrVariableContext.\ivalue());
 
-shared class Val(val)
-{
-    shared Anything val;
+    return convertValue(val);
 }
 
-/*
-shared class SVal(shared String val) extends Val<String>(){}
-shared class IVal() extends Val(){}
-shared class NVal() extends Val(){}
-shared class BVal(shared Boolean val) extends Val(){}
-shared class EVal(shared String val) extends Val(){}
-shared class OVal(v) extends Val()
+Anything convertValue(GraphQLParser.ValueContext val)
 {
-    shared Map<String, Val | Var> v;
-}
-*/
-
-shared class Var(name)
-{
-    shared String name;
+    Anything value_;
+    switch (val)
+    case (is GraphQLParser.StringValueContext) {
+        value_ = val.text.removeInitial("\"").removeTerminal("\"");
+    }
+    case (is GraphQLParser.NumberValueContext) {
+        value s = val.text;
+        if (s.containsAny({'.', 'e', 'E'})) {
+            assert (is Float f = Float.parse(s));
+            value_ = f;
+        }
+        else {
+            assert (is Integer i = Integer.parse(s));
+            value_ = i;
+        }
+    }
+    case (is GraphQLParser.NullValueContext) {
+        value_ = null;
+    }
+    case (is GraphQLParser.BooleanValueContext) {
+        value_ = val.text == "true";
+    }
+    case (is GraphQLParser.EnumValueContext) {
+        value_ = val.text;
+    }
+    case (is GraphQLParser.ArrayValueContext) {
+        value_ = [ for (valOrVar in val.array().valueOrVariable()) convertValueOrVariable(valOrVar) ];
+    }
+    case (is GraphQLParser.ObjectValueContext) {
+        value_ = map({ for (arg in val.\iobject().argument()) arg.name().text -> convertValueOrVariable(arg.valueOrVariable()) });
+    }
+    else {
+        throw AssertionError("could not create argument of type ``type(val)``");
+    }
+    return value_;
 }
 
 Argument createArgument(GraphQLParser.ArgumentContext argumentContext)
 {
-    Val | Var convertValue(GraphQLParser.ValueOrVariableContext valueOrVariableContext)
-    {
-        if (exists var = valueOrVariableContext.variable()) {
-            return Var(var.name().text);
-        }
-        assert (exists val = valueOrVariableContext.\ivalue());
-
-        Val value_;
-        switch (val)
-        case (is GraphQLParser.StringValueContext) {
-            value_ = Val(val.text.removeInitial("\"").removeTerminal("\""));
-        }
-        case (is GraphQLParser.NumberValueContext) {
-            value s = val.text;
-            if (s.containsAny({'.', 'e', 'E'})) {
-                assert (is Float f = Float.parse(s));
-                value_ = Val(f);
-            }
-            else {
-                assert (is Integer i = Integer.parse(s));
-                value_ = Val(i);
-            }
-        }
-        case (is GraphQLParser.NullValueContext) {
-            value_ = Val(null);
-        }
-        case (is GraphQLParser.BooleanValueContext) {
-            value_ = Val(val.text == "true");
-        }
-        case (is GraphQLParser.EnumValueContext) {
-            value_ = Val(val.text);
-        }
-        case (is GraphQLParser.ArrayValueContext) {
-            value_ = Val([ for (valOrVar in val.array().valueOrVariable()) convertValue(valOrVar) ]);
-        }
-        case (is GraphQLParser.ObjectValueContext) {
-            value_ = Val(map({ for (arg in val.\iobject().argument()) arg.name().text -> convertValue(arg.valueOrVariable()) }));
-        }
-        else {
-            throw AssertionError("could not create argument of type ``type(val)``");
-        }
-        return value_;
-    }
 
     String name = argumentContext.name().text;
     value x = argumentContext.valueOrVariable();
-    Val | Var value_ = convertValue(x);
+    Anything | Var value_ = convertValueOrVariable(x);
     return Argument(name, value_);
 }
 
@@ -227,6 +225,42 @@ InlineFragment createInlineFragment(GraphQLParser.InlineFragmentContext inlineFr
     String? typeCondition = inlineFragmentContext.typeCondition()?.typeName()?.name()?.text;
     value directives = createDirectives(inlineFragmentContext.directives());
     return InlineFragment(selectionSet, typeCondition, directives);
+}
+
+[<String->VariableDefinition<Object, String?>>+]? createVariableDefinitions(GraphQLParser.VariableDefinitionsContext variableDefinitionsContext, Schema schema)
+{
+    value variableDefinitions = [ for (variableDefinitionContext in variableDefinitionsContext.variableDefinition()) variableDefinitionContext.variable().name().text -> createVariableDefinition(variableDefinitionContext, schema) ];
+    assert (nonempty variableDefinitions);
+    return variableDefinitions;
+
+}
+
+VariableDefinition<Object, String?> createVariableDefinition(GraphQLParser.VariableDefinitionContext variableDefinitionContext, Schema schema)
+{
+    value x = variableDefinitionContext.type().typeName().text;
+    value registeredType = schema.lookupType(x);
+    if (!is InputCoercing<String, Anything, Nothing> registeredType) {
+        throw;
+    }
+    value c1 = variableDefinitionContext.defaultValue();
+    Object?|Undefined defaultValue;
+    if (is Null c1) {
+        defaultValue = undefined;
+    }
+    else {
+        value c2 = c1.\ivalue();
+        // FIXME prevent var in list or object value
+        value inputValue = convertValue(c2);
+        defaultValue = registeredType.coerceInput(inputValue) of Object?;
+        if (is CoercionError defaultValue) {
+            if (is Null inputValue) {
+                throw AssertionError("cannot happen");
+            }
+            throw AssertionError("illegal default value <``inputValue``> for variable of type ``registeredType``");
+        }
+    }
+    // FIXME first type parameter should be set dynamically according to type of c2
+    return VariableDefinition<Object, String>(registeredType, defaultValue);
 }
 
 [Directive+]? createDirectives(GraphQLParser.DirectivesContext? directivesContext)
