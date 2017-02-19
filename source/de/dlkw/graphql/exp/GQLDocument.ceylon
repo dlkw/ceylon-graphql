@@ -3,8 +3,7 @@ import de.dlkw.graphql.exp.types {
     Undefined,
     GQLType,
     assertGQLName,
-    InputCoercing,
-    Named
+    InputCoercingBase
 }
 
 shared interface IFragmentTypeConditioned
@@ -60,7 +59,7 @@ shared class VariableDefinition<out Value, out TypeName>(type, defaultValue = un
     given Value satisfies Object
     given TypeName of String | Null
 {
-    shared GQLType<TypeName> & InputCoercing<TypeName, Value, Nothing> type;
+    shared GQLType<TypeName> & InputCoercingBase<TypeName, Value> type;
     shared Value?|Undefined defaultValue;
 }
 
@@ -157,6 +156,7 @@ Document doci()
     return doc;
 }
 
+/*
 shared alias InputValue => SVal | IVal | FVal | NVal | BVal | EVal | LVal | OVal;
 shared abstract class Vall<V, T>(shared T v) of V
 given V of SVal | IVal | FVal | NVal | BVal | EVal | LVal | OVal
@@ -170,7 +170,45 @@ shared class BVal(Boolean val) extends Vall<BVal, Boolean>(val){}
 shared class EVal(String val) extends Vall<EVal, String>(val){}
 shared class LVal({InputValue*} val) extends Vall<LVal, {InputValue*}>(val){}
 shared class OVal(Map<String, InputValue> val) extends Vall<OVal, Map<String, InputValue>>(val){}
+*/
 
+shared alias DocumentValue<out V> => String | Integer | Float | Boolean | EnumLiteral | IObject<V> | Null | IList<V> | V;
+shared class EnumLiteral(value_)
+{
+    shared String value_;
+    assert (!value_ in {"null, true. false"});
+
+    string => "enum literal \"``value_``\"";
+}
+
+shared class IObject<out  V>({<String->DocumentValue<V>>*} fields)
+    satisfies Map<String, DocumentValue<V>>
+    given V satisfies Var
+{
+    import ceylon.language { outerMap = map }
+    value store = outerMap(fields);
+    shared actual Boolean defines(Object key) => store.defines(key);
+
+    shared actual DocumentValue<V>? get(Object key) => store.get(key);
+
+    shared actual Iterator<String->DocumentValue<V>> iterator() => store.iterator();
+
+    shared actual Integer hash => store.hash;
+
+    shared actual Boolean equals(Object that) => store.equals(that);
+}
+
+shared class IList<out V>(Sequential<DocumentValue<V>> items)
+    satisfies List<DocumentValue<V>>
+    given V satisfies Var
+{
+    // TODO is this enough to override performance-wise?
+    getFromFirst = items.getFromFirst;
+    lastIndex => items.lastIndex;
+
+    hash => items.hash;
+    equals = items.equals;
+}
 
 shared class Var(name)
 {

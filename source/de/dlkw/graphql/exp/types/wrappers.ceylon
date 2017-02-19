@@ -1,3 +1,9 @@
+import de.dlkw.graphql.exp {
+    Var
+}
+import ceylon.language.meta {
+    type
+}
 shared interface GQLWrapperType<out Inner, out InnerName>
     satisfies Named<Null>
     given Inner satisfies GQLType<InnerName>
@@ -42,47 +48,67 @@ shared class GQLListType<out Inner, out InnerName>(inner)
     }
 }
 
-shared class GQLInputNonNullType<out Inner, out InnerName, out Coerced, in Input>(inner)
+shared class GQLInputNonNullType<out Inner, out InnerName, out Coerced>(inner)
     extends GQLNonNullType<Inner, InnerName>(inner)
-    satisfies GQLWrapperType<Inner, InnerName> & InputCoercing<InnerName, Coerced, Input>
-    given Inner satisfies GQLNullableType<InnerName> & InputCoercing<InnerName, Coerced, Input>
+    satisfies GQLWrapperType<Inner, InnerName> & InputCoercingBase<InnerName, Coerced>
+    given Inner satisfies GQLNullableType<InnerName> & InputCoercingBase<InnerName, Coerced>
     given InnerName of String | Null
     given Coerced satisfies Object
-    given Input satisfies Object
 {
     Inner inner;
-    doCoerceInput = inner.doCoerceInput;
+    coerceInput = inner.coerceInput;
 
     shared actual Null name => null;
 }
 
-shared class GQLInputListType<out Inner, out InnerName, out Coerced, in Input>(inner)
+shared class GQLInputListType<out Inner, out InnerName, out Coerced>(inner)
     extends GQLListType<Inner, InnerName>(inner)
-    satisfies GQLWrapperType<Inner, InnerName> & InputCoercing<InnerName, {Coerced*}, {Input*}>
-    given Inner satisfies GQLType<InnerName> & InputCoercing<InnerName, Coerced, Input>
+    satisfies GQLWrapperType<Inner, InnerName> & InputCoercingBase<InnerName, {Coerced?|Var*}>
+    given Inner satisfies GQLType<InnerName> & InputCoercingBase<InnerName, Coerced>
     given InnerName of String | Null
     given Coerced satisfies Object
-    given Input satisfies Object
 {
     Inner inner;
-    shared actual [Coerced*]|CoercionError doCoerceInput({Input*} input)
+    shared actual {Coerced?|Var*}? | Var | CoercionError coerceInput(Anything input)
     {
-        class ElementCoercionException(shared CoercionError e) extends Exception(){}
+        if (is Null | Var input) {
+            return input;
+        }
 
-        try {
-            return input.map((el)
-            {
-                value elCoerced = inner.doCoerceInput(el);
-                if (is CoercionError elCoerced) {
-                    throw ElementCoercionException(elCoerced);
-                }
-                return elCoerced;
-            }).sequence();
+        if (is {Anything*} input) {
+            class ElementCoercionException(shared CoercionError e) extends Exception(){}
+            try {
+                return input.map((el)
+                {
+                    if (is Null | Var el) {
+                        return el;
+                    }
+                    value elCoerced = inner.coerceInput(el);
+                    if (is CoercionError elCoerced) {
+                        throw ElementCoercionException(elCoerced);
+                    }
+                        return elCoerced;
+/*                    }
+                    else {
+                        String effName = (name else type(inner).string) of String;
+                        throw ElementCoercionException(CoercionError("cannot input-coerce list item value ``el`` of type ``type(el)`` to `` `Coerced` `` as ``effName``: only possible for input type `` `Input` ``."));
+                    }
+*/                }).sequence();
+            }
+            catch (ElementCoercionException e) {
+                return CoercionError("list item could not be coerced: ``e.e.message``");
+            }
         }
-        catch (ElementCoercionException e) {
-            return CoercionError("element of list could not be coerced: ``e.e.message``");
-        }
+
+        return CoercionError("Cannot input-coerce input value ``input`` of type ``type(input)`` to `` `{Coerced*}` `` as ``type(this)``: only possible for input type FIXME."); // FIXME
     }
 
     shared actual Null name => null;
+}
+
+shared void test()
+{
+    <String|Integer|Null|Var>[] l = nothing;
+    <String|Var>[] k = nothing;
+    <String|Integer|Null|Var>[] m = k;
 }

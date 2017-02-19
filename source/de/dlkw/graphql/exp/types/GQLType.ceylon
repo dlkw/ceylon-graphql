@@ -2,6 +2,10 @@ import ceylon.language.meta {
     type
 }
 
+import de.dlkw.graphql.exp {
+    Var
+}
+
 shared abstract class GQLType<out Name>(kind, name_, description = null)
     satisfies Named<Name>
     given Name of String | Null
@@ -65,8 +69,16 @@ shared interface ResultCoercing<out Name, out Coerced, in Input>
     }
 }
 
+shared interface InputCoercingBase<out Name, out Coerced>
+        satisfies Named<Name>
+given Coerced satisfies Object
+given Name of String | Null
+{
+    shared formal Coerced? | Var | CoercionError coerceInput(Anything input);
+}
+
 shared interface InputCoercing<out Name, out Coerced, in Input = Coerced>
-    satisfies Named<Name>
+    satisfies Named<Name> & InputCoercingBase<Name, Coerced>
     given Coerced satisfies Object
     given Input satisfies Object
     given Name of String | Null
@@ -75,18 +87,14 @@ shared interface InputCoercing<out Name, out Coerced, in Input = Coerced>
      according to the GraphQL input coercion rules."
     shared formal Coerced | CoercionError doCoerceInput(Input input);
 
-    shared Coerced? | CoercionError coerceInput(Anything input)
+    shared actual Coerced? | Var | CoercionError coerceInput(Anything input)
     {
-        if (is Null input) {
-            return null;
+        if (is Null | Var | Coerced input) {
+            return input;
         }
 
         if (is Input input) {
             return doCoerceInput(input);
-        }
-
-        if (is Coerced input) {
-            return input;
         }
 
         String effName = (name else type(this).string) of String;

@@ -26,7 +26,7 @@ shared class GQLObjectType(name, {GQLField+} fields_, shared actual {GQLInterfac
     String name;
     String? description;
 
-    shared actual Map<String, GQLField> fields = map(fields_.map((field) => field.name -> field), duplicateDetector);
+    shared actual Map<String, GQLField> fields = map(fields_.map((field) => field.name -> field), duplicateDetector<GQLField>);
 
     value message = StringBuilder();
     for (iface in interfaces) {
@@ -70,7 +70,7 @@ shared class GQLField(name, type, description=null, arguments=emptyMap, deprecat
 shared class ArgumentDefinition<out Value>(type, defaultValue=undefined)
     given Value satisfies Object
 {
-    shared GQLType<String?> & InputCoercing<String?, Value, Nothing> type;
+    shared GQLType<String?> & InputCoercingBase<String?, Value> type;
 
     "The default value used if no value is specified in the graphQL document.
      May be null if null is the default value. If no default value is intended,
@@ -172,7 +172,7 @@ extends GQLAbstractType(TypeKind.\iinterface, name, description)
             log.warn("field ``field.name`` of interface ``name`` has a resolver defined, which will never be used");
         }
     }
-    shared Map<String, GQLField> fields = map(fields_.map((f) => f.name->f), duplicateDetector);
+    shared Map<String, GQLField> fields = map(fields_.map((f) => f.name->f), duplicateDetector<GQLField>);
     shared actual Boolean isSameTypeAs(GQLType<Anything> other) => this === other;
 
     shared actual String wrappedName => name;
@@ -190,8 +190,10 @@ shared interface TypeResolver
     shared formal GQLObjectType? resolveAbstractType(GQLAbstractType abstractType, Object objectValue);
 }
 
-GQLField duplicateDetector(GQLField earlier, GQLField later) {
-    if (!later === earlier) {
+Field duplicateDetector<Field>(Field earlier, Field later)
+    given Field of GQLField | GQLInputField
+{
+    if (!(later of Identifiable) === (earlier of Identifiable)) {
         throw AssertionError("duplicate field definition in type");
     }
     return earlier;

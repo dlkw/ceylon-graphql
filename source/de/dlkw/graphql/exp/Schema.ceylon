@@ -37,8 +37,6 @@ import de.dlkw.graphql.exp.types {
     undefined,
     gqlStringType,
     ArgumentDefinition,
-    InputCoercing,
-    GQLNullableType,
     GQLInterfaceType,
     GQLUnionType,
     TypeResolver,
@@ -55,14 +53,14 @@ shared interface TypeRegistry
     shared formal GQLType<String>? lookupType(String name);
 }
 
-shared class Schema(query, mutation)
+shared class Schema(queryRoot, mutationRoot)
     satisfies TypeRegistry
 {
     "The root type for query operations."
-    GQLObjectType query;
+    shared GQLObjectType queryRoot;
 
     "The root type for mutation operations."
-    shared GQLObjectType? mutation;
+    shared GQLObjectType? mutationRoot;
 
     //#####################
     //# Type registration #
@@ -137,9 +135,9 @@ shared class Schema(query, mutation)
         return alreadyRegistered;
     }
 
-    internalRegisterType(query);
-    if (exists mutation) {
-        internalRegisterType(mutation);
+    internalRegisterType(queryRoot);
+    if (exists mutationRoot) {
+        internalRegisterType(mutationRoot);
     }
 
     GQLField introspectionFieldSchema = GQLField {
@@ -150,7 +148,7 @@ shared class Schema(query, mutation)
     GQLField introspectionFieldType = GQLField {
         name = "__type";
         type = introspection.typeType;
-        arguments = map({ "name"->ArgumentDefinition<String>(GQLInputNonNullType<GQLNullableType<String>&InputCoercing<String, String, String>, String, String, String>(gqlStringType), undefined)});
+        arguments = map({ "name"->ArgumentDefinition<String>(GQLInputNonNullType(gqlStringType), undefined)});
         GQLType<String>? resolver(Anything introspectionSupport, Map<String, Anything> arguments)
         {
             assert (is IntrospectionSupport introspectionSupport);
@@ -165,7 +163,7 @@ shared class Schema(query, mutation)
     extends GQLObjectType(wrapped.name, wrapped.fields.items.chain({introspectionFieldSchema, introspectionFieldType}), {}, wrapped.description)
     {
     }
-    GQLObjectType query__ = GQLObjectTypeWrapper(query);
+    GQLObjectType query__ = GQLObjectTypeWrapper(queryRoot);
 
     {GQLObjectType*} allIntrospectionTypes = {
         introspection.typeSchema
@@ -237,10 +235,10 @@ shared class Schema(query, mutation)
             topLevelExecutor = normalExecutor;
         }
         case (OperationType.mutation) {
-            if (is Null mutation) {
+            if (is Null mutationRoot) {
                 throw AssertionError("Mutations are not supported.");
             }
-            rootType = mutation;
+            rootType = mutationRoot;
             topLevelExecutor = serialExecutor;
         }
 
@@ -413,7 +411,7 @@ shared class Schema(query, mutation)
             }
 
             if (topLevel && (fieldName == "__schema" || fieldName == "__type")) {
-                usedObjectValue = IntrospectionSupport(registeredTypes, query__, mutation, []);
+                usedObjectValue = IntrospectionSupport(registeredTypes, query__, mutationRoot, []);
             }
             else {
                 usedObjectValue = objectValue;

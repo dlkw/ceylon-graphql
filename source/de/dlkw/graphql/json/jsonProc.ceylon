@@ -109,11 +109,10 @@ shared void run()
                 GQLField("of1s1", gqlIntType)
             });
             arguments = map({
-                "inpObj" -> ArgumentDefinition(GQLInputNonNullType<GQLInputObjectType, String, Map<String, Anything>, Map<String, Anything>>(GQLInputObjectType(
+                "inpObj" -> ArgumentDefinition(GQLInputNonNullType(GQLInputObjectType(
                     "of1",
-                    null,
                     {
-                        GQLInputField("of1s1", gqlIntType, null)
+                        GQLInputField("of1s1", gqlIntType)
                     }
                 )))
             });

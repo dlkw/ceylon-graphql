@@ -1,13 +1,16 @@
-shared class GQLEnumType<Value=String>(name_, values, description = null)
+import de.dlkw.graphql.exp {
+    EnumLiteral
+}
+shared class GQLEnumType<out Value=String>(name_, values, description = null)
     extends GQLNullableType<String>(TypeKind.enum, name_, description)
-    satisfies ResultCoercing<String, String, Value> & InputCoercing<String, Value, String>
+    satisfies ResultCoercing<String, String, Object> & InputCoercing<String, Value, String|EnumLiteral>
     given Value satisfies Object
 {
     String name_;
     String? description;
     [GQLEnumValue<Value>+] values;
 
-    shared actual String | CoercionError doCoerceResult(Value value_)
+    shared actual String | CoercionError doCoerceResult(Object value_)
     {
         print(value_);
         value r = values.find((el){print("scan ``el``, ``el.value_ else "<null>"``");return el.value_ == value_;});
@@ -18,7 +21,11 @@ shared class GQLEnumType<Value=String>(name_, values, description = null)
     }
 
     // TODO support variable parsing as tokens instead of strings
-    shared actual Value | CoercionError doCoerceInput(String input) => values.find((v) => v.name == input)?.value_ else CoercionError("no value ``input``");
+    shared actual Value | CoercionError doCoerceInput(String|EnumLiteral input)
+    {
+        String stringInput = if (is String input) then input else input.value_;
+        return values.find((v) => v.name == stringInput)?.value_ else CoercionError("no value <``stringInput``>");
+    }
 
     "Alias for [[values]] to provide the key/value pair in the GraphQL introspection type."
     shared {GQLEnumValue<Value>+} enumValues => values;
@@ -28,7 +35,7 @@ shared class GQLEnumType<Value=String>(name_, values, description = null)
 
 }
 
-shared class GQLEnumValue<Value=String>(name, value__=null, description=null, deprecated=false, deprecationReason=null)
+shared class GQLEnumValue<out Value=String>(name, value__=null, description=null, deprecated=false, deprecationReason=null)
     given Value satisfies Object
 {
     shared String name;

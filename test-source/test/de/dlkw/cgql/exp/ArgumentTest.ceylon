@@ -12,8 +12,7 @@ import de.dlkw.graphql.exp {
     OperationType,
     Argument,
     VariableDefinition,
-    Var,
-    IVal
+    Var
 }
 import de.dlkw.graphql.exp.types {
     GQLObjectType,

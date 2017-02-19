@@ -15,7 +15,8 @@ shared object gqlIntType
 {
     shared actual Integer | CoercionError doCoerceResult(Integer result)
     {
-        return doCoerceInput(result);
+        value coerced = doCoerceInput(result);
+        return coerced;
     }
 
     shared actual Integer | CoercionError doCoerceInput(Integer input)
@@ -35,7 +36,8 @@ shared object gqlFloatType
 {
     shared actual Float | CoercionError doCoerceResult(Float | Integer result)
     {
-        return doCoerceInput(result);
+        value coerced = doCoerceInput(result);
+        return coerced;
     }
 
     shared actual Float | CoercionError doCoerceInput(Float | Integer input)
@@ -56,10 +58,11 @@ shared object gqlStringType
 {
     shared actual String | CoercionError doCoerceResult(String result)
     {
-        return doCoerceInput(result);
+        value coerced = doCoerceInput(result);
+        return coerced;
     }
 
-    shared actual String | CoercionError doCoerceInput(String input) => input;
+    shared actual String doCoerceInput(String input) => input;
 }
 
 shared object gqlBooleanType
@@ -67,10 +70,11 @@ shared object gqlBooleanType
 {
     shared actual Boolean | CoercionError doCoerceResult(Boolean result)
     {
-        return doCoerceInput(result);
+        value coerced = doCoerceInput(result);
+        return coerced;
     }
 
-    shared actual Boolean | CoercionError doCoerceInput(Boolean input) => input;
+    shared actual Boolean doCoerceInput(Boolean input) => input;
 }
 
 shared class GQLIdType<Value>(doCoerceResult, doCoerceInput)

@@ -1,6 +1,3 @@
-import ceylon.language.meta {
-    type
-}
 import ceylon.time {
     Instant
 }
