@@ -49,6 +49,21 @@ shared class GQLObjectType(name, {GQLField+} fields_, shared actual {GQLInterfac
     shared actual String wrappedName => name;
 }
 
+shared class GQLObjectTypeWithAdditionalFields(GQLObjectType wrapped, {GQLField+} additionalFields)
+    extends GQLAbstractObjectType(wrapped.name, wrapped.description)
+{
+    value additionalFieldsMap = map(additionalFields.map((f) => f.name -> f));
+    shared actual Map<String,GQLField> fields => wrapped.fields.patch(additionalFieldsMap);
+
+    shared actual {GQLInterfaceType*} interfaces => wrapped.interfaces;
+
+    isSameTypeAs = wrapped.isSameTypeAs;
+
+    shared actual GQLObjectType type => wrapped.type;
+
+    shared actual String wrappedName => wrapped.wrappedName;
+}
+
 shared class GQLField(name, type, description=null, arguments=emptyMap, deprecated=false, deprecationReason=null, resolver=null)
 {
     shared String name;
@@ -67,10 +82,12 @@ shared class GQLField(name, type, description=null, arguments=emptyMap, deprecat
     shared Map<String, ArgumentDefinition<Object>> args => arguments;
 }
 
-shared class ArgumentDefinition<out Value>(type, defaultValue=undefined)
+shared class ArgumentDefinition<out Value>(type, description=null, defaultValue=undefined)
     given Value satisfies Object
 {
     shared GQLType<String?> & InputCoercingBase<String?, Value> type;
+
+    shared String? description;
 
     "The default value used if no value is specified in the graphQL document.
      May be null if null is the default value. If no default value is intended,

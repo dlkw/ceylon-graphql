@@ -10,7 +10,8 @@ import de.dlkw.graphql.exp.types {
     GQLEnumValue,
     TypeKind,
     GQLTypeReference,
-    resolveAllTypeReferences
+    resolveAllTypeReferences,
+    GQLInputField
 }
 
 object introspection
@@ -32,7 +33,7 @@ object introspection
                 type = GQLNonNullType(gqlBooleanType);
                 Boolean resolver(Anything field, Anything ignored)
                 {
-                    assert (is GQLEnumValue field);
+                    assert (is GQLEnumValue<Anything> field);
                     return field.deprecated;
                 }
             },
@@ -43,6 +44,18 @@ object introspection
         };
     };
 
+    String? defaultValueToString(Anything defaultValue)
+    {
+        // FIXME need to do this depending on argumentDefinition.type, not value type
+        if (is Map<String, Anything> defaultValue) {
+            return "{``",".join({for (n->v in defaultValue) "``n``:``defaultValueToString(v) else "null" ``"})``}";
+        }
+        else if (is String defaultValue) {
+            return "\"``defaultValue``\"";
+        }
+        return defaultValue?.string;
+    }
+
     GQLObjectType typeInputValue = GQLObjectType {
         name = "__InputValue";
         description = "An input value...";
@@ -50,18 +63,49 @@ object introspection
             GQLField {
                 name = "name";
                 type = GQLNonNullType(gqlStringType);
+                resolver = ((x, d){
+                    assert (is <String->Anything> x);
+                    return x.key;
+                });
             },
             GQLField {
                 name = "description";
                 type = gqlStringType;
+                resolver = ((x, d){
+                    assert (is <String->Anything> x);
+                    if (is ArgumentDefinition<Anything> item = x.item) {
+                        return item.description;
+                    }
+                    else if (is GQLInputField item = x.item) {
+                        return item.description;
+                    }
+                    throw;
+                });
             },
             GQLField {
                 name = "type";
                 type = GQLNonNullType(GQLTypeReference("__Type"));
+                resolver = ((x, d){
+                    assert (is <String->Anything> x);
+                    if (is ArgumentDefinition<Anything> item = x.item) {
+                        return item.type;
+                    }
+                    else if (is GQLInputField item = x.item) {
+                        return item.type;
+                    }
+                    throw;
+                });
             },
             GQLField {
                 name = "defaultValue";
                 type = gqlStringType;
+                resolver = ((x, d){
+                    assert (is <String->Anything> x);
+                    if (is ArgumentDefinition<Anything> item = x.item) {
+                        return defaultValueToString(item.defaultValue);
+                    }
+                    return null;
+                });
             }
         };
     };
@@ -130,7 +174,7 @@ object introspection
             GQLField {
                 name = "fields";
                 type = GQLListType(GQLNonNullType(typeField));
-                arguments = map({ "includeDeprecated"->ArgumentDefinition(gqlBooleanType, false) });
+                arguments = map({ "includeDeprecated"->ArgumentDefinition(gqlBooleanType, null, false) });
                 {GQLField*}? resolver(Anything objectType, Map<String, Anything> args)
                 {
                     if (is GQLObjectType objectType) {
@@ -154,10 +198,10 @@ object introspection
             GQLField {
                 name = "enumValues";
                 type = GQLListType(GQLNonNullType(typeEnumValue));
-                arguments = map({ "includeDeprecated"->ArgumentDefinition(gqlBooleanType, false) });
-                {GQLEnumValue*}? resolver(Anything enumType, Map<String, Anything> args)
+                arguments = map({ "includeDeprecated"->ArgumentDefinition(gqlBooleanType, null, false) });
+                {GQLEnumValue<Anything>*}? resolver(Anything enumType, Map<String, Anything> args)
                 {
-                    if (is GQLEnumType enumType) {
+                    if (is GQLEnumType<Anything> enumType) {
                         assert (is Boolean includeDeprecated = args["includeDeprecated"]);
                         if (includeDeprecated) {
                             return enumType.enumValues;
@@ -168,7 +212,7 @@ object introspection
                 }
             },
             GQLField {
-                name = "inputValues";
+                name = "inputFields";
                 type = GQLListType(GQLNonNullType(typeInputValue));
             },
             GQLField {

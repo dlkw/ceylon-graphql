@@ -11,7 +11,7 @@ import de.dlkw.graphql.antlr4java {
 }
 import de.dlkw.graphql.exp {
     OperationType,
-    AField,
+    Field,
     FragmentDefinition,
     FragmentSpread,
     InlineFragment,
@@ -126,7 +126,7 @@ shared void testFieldNoAlias()
     }
 
     assert (exists op = parsedDoc.operationDefinition(null));
-    assert (is AField f = op.selectionSet.first);
+    assert (is Field f = op.selectionSet.first);
     assertEquals(f.name, "f");
     assertNull(f.alias_);
     assertNull(f.selectionSet);
@@ -143,7 +143,7 @@ shared void testFieldWithAlias()
     }
 
     assert (exists op = parsedDoc.operationDefinition(null));
-    assert (is AField f = op.selectionSet.first);
+    assert (is Field f = op.selectionSet.first);
     assertEquals(f.name, "f");
     assertEquals(f.alias_, "a");
     assertNull(f.selectionSet);
@@ -160,9 +160,9 @@ shared void testFieldWithSubfield()
         throw;
     }
 
-    assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
+    assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assert (exists selSet = f.selectionSet);
-    assert (is AField s = selSet.first);
+    assert (is Field s = selSet.first);
     assertEquals(s.name, "s");
 }
 
@@ -177,7 +177,7 @@ shared void testFieldWithStringArgumentNamedNull()
         throw;
     }
 
-    assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
+    assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
     assert (is String a = f.arguments["null"]);
     assertEquals(a, "o8");
@@ -194,7 +194,7 @@ shared void testFieldWithNullArgument()
         throw;
     }
 
-    assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
+    assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
     assert (is Null a = f.arguments.get("a"));
     assertNull(a);
@@ -211,7 +211,7 @@ shared void testFieldWithTrueArgument()
         throw;
     }
 
-    assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
+    assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
     assert (is Boolean a = f.arguments["a"]);
     assertEquals(a, true);
@@ -228,7 +228,7 @@ shared void testFieldWithFalseArgument()
         throw;
     }
 
-    assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
+    assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
     assert (is Boolean a = f.arguments["a"]);
     assertEquals(a, false);
@@ -246,7 +246,7 @@ shared void testFieldWithEnumArgument()
         throw;
     }
 
-    assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
+    assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
     assert (is String a = f.arguments["true"]);
     assertEquals(a, "boing");
@@ -263,7 +263,7 @@ shared void testFieldWithIntArgument()
         throw;
     }
 
-    assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
+    assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
     assert (is Integer a = f.arguments["true"]);
     assertEquals(a, 5);
@@ -280,7 +280,7 @@ shared void testFieldWithFloatArgument()
         throw;
     }
 
-    assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
+    assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
     assert (is Float a = f.arguments["true"]);
     assertEquals(a, 5.1);
@@ -298,7 +298,7 @@ shared void testFieldWithIntListArgument()
         throw;
     }
 
-    assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
+    assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
     assert (is Sequence<Var|Anything> a = f.arguments["true"]);
     assertEquals(a.size, 3);
@@ -323,7 +323,7 @@ shared void testFieldWithStringEnumListArgument()
         throw;
     }
 
-    assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
+    assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
     assert (is Sequence<Var|Anything> a = f.arguments["true"]);
     assertEquals(a.size, 3);
@@ -348,7 +348,7 @@ shared void testFieldWithEnumEnumListArgument()
         throw;
     }
 
-    assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
+    assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
     assert (is Sequence<Var|Anything> a = f.arguments["true"]);
     assertEquals(a.size, 3);
@@ -372,7 +372,7 @@ shared void testFieldWithObjectArgument()
         throw;
     }
 
-    assert (is AField f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
+    assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
     assert (is Map<> a = f.arguments["true"]);
     assertEquals(a.size, 2);
@@ -399,7 +399,7 @@ shared void testFragmentDefinition()
     assertEquals(fr.name, "fr");
     assertEquals(fr.typeCondition, "t");
     value sel = fr.selectionSet.first;
-    assert (is AField sel);
+    assert (is Field sel);
     assertEquals(sel.name, "f1");
 }
 
@@ -429,7 +429,7 @@ shared void testInlineFragment()
 
     assert (is InlineFragment inl = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertNull(inl.typeCondition);
-    assert (is AField f = inl.selectionSet.first);
+    assert (is Field f = inl.selectionSet.first);
     assertEquals(f.name, "f");
 }
 
@@ -601,4 +601,29 @@ shared void testStringVariableWithEnumLiteralForbidden()
         return;
     }
     fail("ParseError expected");
+}
+
+
+test
+shared void testFieldSkipDirective()
+{
+    Schema schema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType)}), null);
+    String doc = "{f @skip(if:false)}";
+    value parsedDoc = parseDocument(doc, schema);
+    if (is ParseError parsedDoc) {
+        print(parsedDoc.errorInfos);
+        fail();
+        throw;
+    }
+    value xx = schema.executeRequest(parsedDoc);
+    print(xx);
+
+    assert (is Field fd = parsedDoc.operationDefinition(null)?.selectionSet?.get(0));
+    assert (exists dir = fd.directives);
+    assertEquals(dir.size, 1);
+    assertEquals(dir.first.name, "skip");
+    assert (exists args = dir.first.arguments);
+    assertEquals(args.size, 1);
+    assertEquals(args.first.name, "if");
+    assertEquals(args.first.value_, true);
 }

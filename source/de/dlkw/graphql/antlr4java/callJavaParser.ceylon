@@ -31,8 +31,8 @@ import de.dlkw.graphql.exp.types {
     undefined,
     Undefined,
     CoercionError,
-    ArgumentDefinition,
-    InputCoercingBase
+    InputCoercingBase,
+    GQLObjectTypeWithAdditionalFields
 }
 
 import java.util {
@@ -104,7 +104,7 @@ Document | ParseError createDocument(GraphQLParser.DocumentContext documentConte
     value result = { for (definitionContext in definitionContexts)
         if (exists oc = definitionContext.operationDefinition())
             then createOperationDefinition(oc, schema)
-            else createFragmentDefinition(definitionContext.fragmentDefinition(), schema)}
+            else createFragmentDefinition(definitionContext.fragmentDefinition())}
         .sequence();
 
     value allErrorInfos = result.narrow<ParseError>().flatMap((err) => err.errorInfos).sequence();
@@ -138,7 +138,7 @@ OperationDefinition | ParseError createOperationDefinition(GraphQLParser.Operati
         else null;
 
     value directives = createDirectives(operationDefinitionContext.directives());
-    value selectionSet = createSelectionSet(operationDefinitionContext.selectionSet(), rootType, schema);
+    value selectionSet = createSelectionSet(operationDefinitionContext.selectionSet());
 
     variable ErrorInfo[] errorInfos = [];
 
@@ -216,32 +216,20 @@ DocumentValue<V> convertValue<V>(GraphQLParser.ValueContext val)
     return value_;
 }
 
-Argument | ParseError createArgument(GraphQLParser.ArgumentContext argumentContext, Map<String, ArgumentDefinition<Anything>> argumentDefinitions)
+Argument | ParseError createArgument(GraphQLParser.ArgumentContext argumentContext)
 {
     String name = argumentContext.name().text;
-    value argumentDefinition = argumentDefinitions[name];
-    assert (exists argumentDefinition);
     value valueOrVariableContext = argumentContext.valueOrVariable();
     DocumentValue<Var> | Var converted = convertValueOrVariable<Var>(valueOrVariableContext);
-    if (is Var converted) {
-        return Argument(name, converted);
-    }
-    value coerced = argumentDefinition.type.coerceInput(converted);
-    if (is CoercionError coerced) {
-        if (is Null converted) {
-            throw AssertionError("cannot happen");
-        }
-        return ParseError([ErrorInfo("illegal default value <``converted``> for argument of type ``argumentDefinition.type``: ``coerced.message``", argumentContext.start.line, argumentContext.start.charPositionInLine + 1)]);
-    }
-    return Argument(name, coerced);
+    return Argument(name, converted);
 }
 
-[Argument+]? | ParseError createArguments(GraphQLParser.ArgumentsContext? argumentsContext, GQLField fieldDefinition)
+[Argument+]? | ParseError createArguments(GraphQLParser.ArgumentsContext? argumentsContext)
 {
     if (is Null argumentsContext) {
         return null;
     }
-    value arguments = { for (argumentContext in argumentsContext.argument()) createArgument(argumentContext, fieldDefinition.arguments) }.sequence();
+    value arguments = { for (argumentContext in argumentsContext.argument()) createArgument(argumentContext) }.sequence();
     assert (nonempty arguments);
 
     value allErrorInfos = { for (v in arguments) if (is ParseError v) v}.flatMap((err) => err.errorInfos).sequence();
@@ -254,9 +242,11 @@ Argument | ParseError createArgument(GraphQLParser.ArgumentContext argumentConte
     return result;
 }
 
-[Selection+] | ParseError createSelectionSet(GraphQLParser.SelectionSetContext selectionSetContext, GQLObjectType enclosingType, Schema schema)
+alias OT => GQLObjectType|GQLObjectTypeWithAdditionalFields;
+
+[Selection+] | ParseError createSelectionSet(GraphQLParser.SelectionSetContext selectionSetContext)
 {
-    value selectionSet = { for (selCtx in selectionSetContext.selection()) createSelection(selCtx, enclosingType, schema) }.sequence();
+    value selectionSet = { for (selCtx in selectionSetContext.selection()) createSelection(selCtx) }.sequence();
 
     value allErrorInfos = { for (v in selectionSet) if (is ParseError v) v}.flatMap((err) => err.errorInfos).sequence();
     if (nonempty allErrorInfos) {
@@ -268,19 +258,19 @@ Argument | ParseError createArgument(GraphQLParser.ArgumentContext argumentConte
     return result;
 }
 
-Selection | ParseError createSelection(GraphQLParser.SelectionContext selCtx, GQLObjectType enclosingType, Schema schema)
+Selection | ParseError createSelection(GraphQLParser.SelectionContext selCtx)
 {
     if (exists fieldCtx = selCtx.field()) {
-        return createField(fieldCtx, enclosingType, schema);
+        return createField(fieldCtx);
     }
     else if (exists fragmentSpreadCtx = selCtx.fragmentSpread()) {
         return createFragmentSpread(fragmentSpreadCtx);
     }
     assert (exists inlineFragmentCtx = selCtx.inlineFragment());
-    return createInlineFragment(inlineFragmentCtx, enclosingType, schema);
+    return createInlineFragment(inlineFragmentCtx);
 }
 
-Field | ParseError createField(GraphQLParser.FieldContext fieldContext, GQLObjectType enclosingType, Schema schema)
+Field | ParseError createField(GraphQLParser.FieldContext fieldContext)
 {
     String fieldName;
     String? fieldAlias;
@@ -294,75 +284,97 @@ Field | ParseError createField(GraphQLParser.FieldContext fieldContext, GQLObjec
         fieldName = fieldNameContext.name().text;
     }
 
-    value fieldDefinition = enclosingType.fields[fieldName];
-    assert (exists fieldDefinition);
     value directives = createDirectives(fieldContext.directives());
-    value arguments = createArguments(fieldContext.arguments(), fieldDefinition);
+    value arguments = createArguments(fieldContext.arguments());
 
-    value fieldType = fieldDefinition.type;
     value selectionSetContext = fieldContext.selectionSet();
     [Selection+]? | ParseError selectionSet;
-    if (is GQLObjectType fieldType) {
-        assert (exists selectionSetContext);
-        selectionSet = createSelectionSet(selectionSetContext, fieldType, schema);
+    if (exists selectionSetContext) {
+        selectionSet = createSelectionSet(selectionSetContext);
     }
     else {
-        assert (is Null selectionSetContext);
         selectionSet = null;
     }
 
-    variable ErrorInfo[] errorInfos = [];
-
-    if (is ParseError arguments) {
-        errorInfos = errorInfos.append(arguments.errorInfos);
-    }
-
-    if (is ParseError selectionSet) {
-        errorInfos = errorInfos.append(selectionSet.errorInfos);
-    }
+    variable value errorInfos = exQ(arguments, []);
+    errorInfos = exQ(directives, []);
+    errorInfos = exQ(selectionSet, errorInfos);
 
     if (nonempty ei = errorInfos) {
         return ParseError(ei);
     }
 
     assert (!is ParseError arguments);
+    assert (!is ParseError directives);
     assert (!is ParseError selectionSet);
 
     return Field(fieldName, fieldAlias, arguments, directives, selectionSet);
 }
 
-FragmentDefinition | ParseError createFragmentDefinition(GraphQLParser.FragmentDefinitionContext fragmentDefinitionContext, Schema schema)
+[A+]? | ParseError exP<A>({A|ParseError*} f)
+{
+    value allErrorInfos = { for (v in f) if (is ParseError v) v}.flatMap((err) => err.errorInfos).sequence();
+    if (nonempty allErrorInfos) {
+        return ParseError(allErrorInfos);
+    }
+
+    value result = [ for (r in f) if (!is ParseError r) r ];
+    assert (nonempty result);
+    return result;
+}
+
+ErrorInfo[] exQ<A>([A+]?|ParseError ii, variable ErrorInfo[] ee)
+{
+    if (is ParseError ii) {
+        return ee.append(ii.errorInfos);
+    }
+    return ee;
+}
+
+FragmentDefinition | ParseError createFragmentDefinition(GraphQLParser.FragmentDefinitionContext fragmentDefinitionContext)
 {
     String name = fragmentDefinitionContext.fragmentName().name().text;
     // maybe the following is enough: fragmentDefinitionContext.typeCondition().text;
     String typeCondition = fragmentDefinitionContext.typeCondition().typeName().name().text;
-    value fragmentType = schema.lookupType(typeCondition);
-    assert (is GQLObjectType fragmentType);
 
-    value selectionSet = createSelectionSet(fragmentDefinitionContext.selectionSet(), fragmentType, schema);
-    if (is ParseError selectionSet) {
-        return selectionSet;
+    value directives = createDirectives(fragmentDefinitionContext.directives());
+
+    value selectionSet = createSelectionSet(fragmentDefinitionContext.selectionSet());
+
+    variable value errorInfos = exQ(directives, []);
+    errorInfos = exQ(selectionSet, errorInfos);
+    if (nonempty ei = errorInfos) {
+        return ParseError(ei);
     }
+    assert (!is ParseError directives);
+    assert (!is ParseError selectionSet);
 
-    return FragmentDefinition(name, selectionSet, typeCondition);
+    return FragmentDefinition(name, selectionSet, typeCondition, directives);
 }
 
-FragmentSpread createFragmentSpread(GraphQLParser.FragmentSpreadContext fragmentSpreadContext)
+FragmentSpread | ParseError createFragmentSpread(GraphQLParser.FragmentSpreadContext fragmentSpreadContext)
 {
     value name = fragmentSpreadContext.fragmentName().name().text;
     value directives = createDirectives(fragmentSpreadContext.directives());
+    if (is ParseError directives) {
+        return directives;
+    }
     return FragmentSpread(name, directives);
 }
 
-InlineFragment | ParseError createInlineFragment(GraphQLParser.InlineFragmentContext inlineFragmentContext, GQLObjectType enclosingType, Schema schema)
+InlineFragment | ParseError createInlineFragment(GraphQLParser.InlineFragmentContext inlineFragmentContext)
 {
-    value selectionSet = createSelectionSet(inlineFragmentContext.selectionSet(), enclosingType, schema);
     String? typeCondition = inlineFragmentContext.typeCondition()?.typeName()?.name()?.text;
     value directives = createDirectives(inlineFragmentContext.directives());
+    value selectionSet = createSelectionSet(inlineFragmentContext.selectionSet());
 
-    if (is ParseError selectionSet) {
-        return selectionSet;
+    variable value errorInfos = exQ(directives, []);
+    errorInfos = exQ(selectionSet, errorInfos);
+    if (nonempty ei = errorInfos) {
+        return ParseError(ei);
     }
+    assert (!is ParseError directives);
+    assert (!is ParseError selectionSet);
 
     return InlineFragment(selectionSet, typeCondition, directives);
 }
@@ -413,18 +425,28 @@ VariableDefinition<Object, String?> | ParseError createVariableDefinition(GraphQ
     return VariableDefinition<Object, String>(registeredType, defaultValue);
 }
 
-[Directive+]? createDirectives(GraphQLParser.DirectivesContext? directivesContext)
+[Directive+]? | ParseError createDirectives(GraphQLParser.DirectivesContext? directivesContext)
 {
     if (is Null directivesContext) {
         return null;
     }
 
-    value directives = { for (directiveContext in directivesContext.directive()) createDirective(directiveContext) }.sequence();
-    assert (nonempty directives);
+    value directives = exP({ for (directiveContext in directivesContext.directive()) createDirective(directiveContext) });
     return directives;
 }
 
-Directive createDirective(GraphQLParser.DirectiveContext directiveContext)
+Directive | ParseError createDirective(GraphQLParser.DirectiveContext directiveContext)
 {
-    return Directive();
+    value name = directiveContext.name().text;
+    value argumentsContext = directiveContext.arguments();
+    if (exists argumentsContext) {
+        value arguments = exP({ for (argumentContext in argumentsContext.argument()) createArgument(argumentContext) });
+        if (is ParseError arguments) {
+            return arguments;
+        }
+        return Directive(name, arguments);
+    }
+    else {
+        return Directive(name, null);
+    }
 }

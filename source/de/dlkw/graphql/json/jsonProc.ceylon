@@ -188,7 +188,7 @@ shared void run()
         GQLField{
             name="withIntArg";
             type=gqlIntType;
-            arguments = map({"intArg"->ArgumentDefinition(gqlIntType, Var("intVar"))});
+            arguments = map({"intArg"->ArgumentDefinition(gqlIntType, "argdescr", Var("intVar"))});
             resolver=(v, m)=>m.get("intArg");
         }
     });

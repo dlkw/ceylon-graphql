@@ -5,11 +5,11 @@ import ceylon.language.meta {
 import de.dlkw.graphql.exp {
     Var
 }
-shared class GQLInputObjectType(String name, {GQLInputField+} fields_, String? description = null)
+shared class GQLInputObjectType(String name, {GQLInputField+} inputFields_, String? description = null)
     extends GQLNullableType<String>(TypeKind.inputObject, name, description)
     satisfies InputCoercingBase<String, Map<String, Anything>>
 {
-    Map<String, GQLInputField> fields = map(fields_.map((field) => field.name -> field), duplicateDetector<GQLInputField>);
+    shared Map<String, GQLInputField> inputFields = map(inputFields_.map((field) => field.name -> field), duplicateDetector<GQLInputField>);
 
     shared actual Map<String, Anything>? | Var | CoercionError coerceInput(Anything input)
     {
@@ -22,7 +22,7 @@ shared class GQLInputObjectType(String name, {GQLInputField+} fields_, String? d
             try {
                 return map(input.map((fieldName -> fieldValue)
                 {
-                    value fieldDefinition = fields[fieldName];
+                    value fieldDefinition = inputFields[fieldName];
                     if (is Null fieldDefinition) {
                         throw FieldCoercionException(fieldName, CoercionError("field does not exist"));
                     }

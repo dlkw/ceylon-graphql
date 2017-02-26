@@ -42,7 +42,9 @@ import de.dlkw.graphql.exp.types {
     TypeResolver,
     GQLAbstractType,
     GQLInputNonNullType,
-    GQLWrapperType
+    GQLWrapperType,
+    gqlBooleanType,
+    GQLTypeReference
 }
 
 Logger log = logger(`package`);
@@ -53,6 +55,16 @@ shared interface TypeRegistry
     shared formal GQLType<String>? lookupType(String name);
 }
 
+
+class IntrospectionSupport(types, queryType, mutationType, directives)
+{
+    shared IntrospectionSupport __schema => this;
+    shared {GQLType<String>+} types;
+    shared GQLObjectType queryType;
+    shared GQLObjectType? mutationType;
+    shared Empty directives;
+}
+
 shared class Schema(queryRoot, mutationRoot)
     satisfies TypeRegistry
 {
@@ -61,6 +73,11 @@ shared class Schema(queryRoot, mutationRoot)
 
     "The root type for mutation operations."
     shared GQLObjectType? mutationRoot;
+
+    shared {DirectiveDefinition*} directiveDefinitions= [
+        DirectiveDefinition("skip", "builtin skip directive", ["if" -> ArgumentDefinition(GQLInputNonNullType(gqlBooleanType))]),
+        DirectiveDefinition("include", "builtin include directive", ["if" -> ArgumentDefinition(GQLInputNonNullType(gqlBooleanType))])
+    ];
 
     //#####################
     //# Type registration #
@@ -80,8 +97,10 @@ shared class Schema(queryRoot, mutationRoot)
             if (is GQLWrapperType<GQLType<Anything>, Anything> inner) {
                 regWrapper(inner);
             }
-            assert (is GQLType<String> inner);
-            internalRegisterType(inner);
+            else {
+                assert (is GQLType<String> inner);
+                internalRegisterType(inner);
+            }
         }
 
         void regAny(GQLType<Anything> type) {
@@ -94,11 +113,11 @@ shared class Schema(queryRoot, mutationRoot)
             }
         }
 
-        String name = type.name;
-
-        if (name.startsWith("__")) {
-            throw ; // TODO
+        if (is GQLTypeReference type) {
+            return false;
         }
+
+        String name = type.name;
 
         Boolean alreadyRegistered;
         value registeredType = types[name];
@@ -139,6 +158,7 @@ shared class Schema(queryRoot, mutationRoot)
     if (exists mutationRoot) {
         internalRegisterType(mutationRoot);
     }
+    internalRegisterType(introspection.typeSchema);
 
     GQLField introspectionFieldSchema = GQLField {
         name = "__schema";
@@ -148,14 +168,13 @@ shared class Schema(queryRoot, mutationRoot)
     GQLField introspectionFieldType = GQLField {
         name = "__type";
         type = introspection.typeType;
-        arguments = map({ "name"->ArgumentDefinition<String>(GQLInputNonNullType(gqlStringType), undefined)});
+        arguments = map({ "name"->ArgumentDefinition<String>(GQLInputNonNullType(gqlStringType), "name of the type to query", undefined)});
         GQLType<String>? resolver(Anything introspectionSupport, Map<String, Anything> arguments)
         {
             assert (is IntrospectionSupport introspectionSupport);
 
             assert (is String name = arguments["name"]);
-            return introspectionSupport.types.find((t) =>
-            t.name?.equals(name) else false);
+            return introspectionSupport.types.find((t) => t.name.equals(name));
         }
     };
 
@@ -164,12 +183,6 @@ shared class Schema(queryRoot, mutationRoot)
     {
     }
     GQLObjectType query__ = GQLObjectTypeWrapper(queryRoot);
-
-    {GQLObjectType*} allIntrospectionTypes = {
-        introspection.typeSchema
-        ,
-        introspection.typeType
-    };
 
     {Element+} mkExistingFirst<Element>({Element*} elements)
     {
@@ -297,7 +310,7 @@ shared class Schema(queryRoot, mutationRoot)
     Map<String, Object?> | FieldError coerceArgumentValues(objectType, field, variableValues, errors, path)
     {
         GQLAbstractObjectType objectType;
-        AField field;
+        Field field;
         Map<String, Object?> variableValues;
 
         [String, <String|Integer>*] path;
@@ -431,19 +444,52 @@ shared class Schema(queryRoot, mutationRoot)
         return resultMap;
     }
 
-    Map<String, [AField+]> collectFields(GQLAbstractObjectType objectType, [Selection+] selectionSet, variableValues, FragmentDefinition? lookupFragmentDefinition(String name), MutableSet<Object> visitedFragments=HashSet<Object>())
+    Map<String, [Field+]> collectFields(GQLAbstractObjectType objectType, [Selection+] selectionSet, variableValues, FragmentDefinition? lookupFragmentDefinition(String name), MutableSet<Object> visitedFragments=HashSet<Object>())
     {
         Map<String, Anything> variableValues;
 
-        MutableMap<String, [AField+]> groupedFields = HashMap<String, [AField+]>(linked);
+        MutableMap<String, [Field+]> groupedFields = HashMap<String, [Field+]>(linked);
         for (selection in selectionSet) {
-            // TODO 3a @skip directive
-            // TODO 3b @include directive
+            if (exists skip = selection.directives?.find((dir) => dir.name == "skip")) {
+                if (exists ifArg = skip.arguments?.find((arg) => arg.name == "if")) {
+                    value ifValue = ifArg.value_;
+                    if (is Var ifValue) {
+                        value val = variableValues[ifValue.name];
+                        if (is Boolean val, val) {
+                            continue;
+                        }
+                    }
+                    if (is Boolean ifValue, ifValue) {
+                        continue;
+                    }
+                }
+            }
+
+            if (exists include_ = selection.directives?.find((dir) => dir.name == "include")) {
+                if (exists ifArg = include_.arguments?.find((arg) => arg.name == "if")) {
+                    value ifValue = ifArg.value_;
+                    if (is Var ifValue) {
+                        value val = variableValues[ifValue.name];
+                        if (!is Boolean val) {
+                            continue;
+                        }
+                        if (!val) {
+                            continue;
+                        }
+                    }
+                    if (!is Boolean ifValue) {
+                        continue;
+                    }
+                    if (!ifValue) {
+                        continue;
+                    }
+                }
+            }
 
             switch (selection)
-            case (is AField) {
+            case (is Field) {
                 String responseKey = selection.responseKey;
-                [AField+] groupForResponseKey;
+                [Field+] groupForResponseKey;
                 if (exists tmp = groupedFields[responseKey]) {
                     groupForResponseKey = tmp.withTrailing(selection);
                 }
@@ -481,7 +527,7 @@ shared class Schema(queryRoot, mutationRoot)
                 value fragmentGroupedFieldSet = collectFields(objectType, fragment.selectionSet, variableValues, lookupFragmentDefinition, visitedFragments);
 
                 for (responseKey -> fragmentGroup in fragmentGroupedFieldSet) {
-                    [AField+] groupForResponseKey;
+                    [Field+] groupForResponseKey;
                     if (exists tmp = groupedFields[responseKey]) {
                         groupForResponseKey = tmp.append(fragmentGroup);
                     }
@@ -521,7 +567,7 @@ shared class Schema(queryRoot, mutationRoot)
         GQLAbstractObjectType objectType;
         Anything objectValue;
         GQLType<String?> fieldType;
-        [AField+] fields;
+        [Field+] fields;
         Map<String, Object?> variableValues;
 
         FragmentDefinition? lookupFragmentDefinition(String name);
@@ -532,7 +578,7 @@ shared class Schema(queryRoot, mutationRoot)
 
         log.debug("execute field ``path``");
 
-        AField field = fields.first;
+        Field field = fields.first;
 
         value argumentValues = coerceArgumentValues(objectType, field, variableValues, errors, path);
         if (is FieldError argumentValues) {
@@ -586,7 +632,7 @@ shared class Schema(queryRoot, mutationRoot)
     Anything | NullForError completeValues(fieldType, fields, result, variableValues, lookupFragmentDefinition, errors, path, executor)
     {
         GQLType<String?> fieldType;
-        [AField+] fields;
+        [Field+] fields;
         Anything result;
         Map<String, Object?> variableValues;
 
@@ -620,7 +666,7 @@ shared class Schema(queryRoot, mutationRoot)
     Anything | NullForError innerCompleteValues(fieldType, fields, result, variableValues, lookupFragmentDefinition, inNonNull, errors, path, executor)
     {
         GQLType<String?> fieldType;
-        [AField+] fields;
+        [Field+] fields;
         Anything result;
         Map<String, Object?> variableValues;
 
@@ -647,7 +693,8 @@ shared class Schema(queryRoot, mutationRoot)
 
             // for convenience, use items of a map as list entries.
             // may not be what is desired if items don't contain the map keys.
-            {Anything*} iterable = if (is Map<Anything, Anything> result) then result.items else result;
+//            {Anything*} iterable = if (is Map<Anything, Anything> result) then result.items else result;
+            value iterable = result;
 
             variable Boolean hasFieldErrors = false;
             MutableList<Anything> elementResults = ArrayList<Anything>();
@@ -671,7 +718,7 @@ shared class Schema(queryRoot, mutationRoot)
             }
             return elementResults.sequence();
         }
-        case (is GQLScalarType<Anything, Nothing> | GQLEnumType) {
+        case (is GQLScalarType<Anything, Nothing> | GQLEnumType<Anything>) {
             value coerced = fieldType.coerceResult(result);
             if (is CoercionError coerced) {
                 errors.add(ResultCoercionError(path, coerced));
@@ -751,7 +798,7 @@ shared class Schema(queryRoot, mutationRoot)
     }
     */
 
-    [Selection+] mergeSelectionSets([AField+] fields)
+    [Selection+] mergeSelectionSets([Field+] fields)
     {
         variable [Selection*] x = [];
         for (field in fields) {
@@ -766,15 +813,6 @@ shared class Schema(queryRoot, mutationRoot)
         assert(y.sequence() == x.sequence());
         assert (nonempty yy = y.sequence());
         return yy;
-    }
-
-    class IntrospectionSupport(types, queryType, mutationType, directives)
-    {
-        shared IntrospectionSupport __schema => this;
-        shared {GQLType<String>+} types;
-        shared GQLObjectType queryType;
-        shared GQLObjectType? mutationType;
-        shared Empty directives;
     }
 }
 
@@ -931,11 +969,11 @@ class RestIterable<Element>(Iterator<Element> startedIterator)
     };
 }
 
-
+FunctionDeclaration? declGetAttribute = `interface Class`.getMemberDeclaration<FunctionDeclaration>("getAttribute");
 Anything getDyn(Object obj, String name)
 {
     // could be moved outside this function and evaluated only once
-    value declGetAttribute = `interface Class`.getMemberDeclaration<FunctionDeclaration>("getAttribute");
+    //value declGetAttribute = `interface Class`.getMemberDeclaration<FunctionDeclaration>("getAttribute");
     assert (exists declGetAttribute);
 
     value t = type(obj);
@@ -945,7 +983,7 @@ Anything getDyn(Object obj, String name)
     value attribute = getAttribute(name);
     if (is Null attribute) {
         // TODO make configurable: silent null / log message / exception (field error)
-        log.warn("Cannot resolve value: No attribute ``name`` found in object of type ``type(obj)``.");
+        log.warn("Cannot resolve value: No attribute \"``name``\" found in object of type ``type(obj)``.");
         return null;
     }
     value val = attribute.bind(obj);
@@ -964,6 +1002,6 @@ shared void r()
     {
         shared Float c = 5.4;
     }
-    value x = getDyn(B(), "c");
+    value x = getDyn(B(), "b");
     print(x);
 }

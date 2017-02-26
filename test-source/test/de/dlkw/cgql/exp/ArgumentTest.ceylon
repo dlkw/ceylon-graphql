@@ -29,7 +29,7 @@ shared void intArgumentWithIntValue() {
             name = "f1";
             type = gqlIntType;
             arguments = map({
-                "arg1"->ArgumentDefinition(gqlIntType, 99)
+                "arg1"->ArgumentDefinition(gqlIntType, "x", 99)
             });
             resolver = (a, e) => e["arg1"];
         }
@@ -55,7 +55,7 @@ shared void intArgumentWithIntDefault() {
             name = "f1";
             type = gqlIntType;
             arguments = map({
-                "arg1"->ArgumentDefinition(gqlIntType, 99)
+                "arg1"->ArgumentDefinition(gqlIntType, "d", 99)
             });
             resolver = (a, e) => e["arg1"];
         }
@@ -106,7 +106,7 @@ shared void intArgumentWithoutDefault() {
             name = "f1";
             type = gqlIntType;
             arguments = map({
-                "arg1"->ArgumentDefinition(gqlIntType, undefined)
+                "arg1"->ArgumentDefinition(gqlIntType, "d", undefined)
             });
             resolver = (a, e) => e["arg1"];
         }
@@ -131,7 +131,7 @@ shared void intArgumentWithVariable() {
             name = "f1";
             type = gqlIntType;
             arguments = map({
-                "arg1"->ArgumentDefinition(gqlIntType, undefined)
+                "arg1"->ArgumentDefinition(gqlIntType, "d1", undefined)
             });
             resolver = (a, e) => e["arg1"];
         }

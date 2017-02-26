@@ -69,10 +69,16 @@ shared class OperationType of query | mutation
     shared new mutation{}
 }
 
-shared alias Selection => AField | FragmentSpread | InlineFragment;
+shared alias Selection => Field | FragmentSpread | InlineFragment;
 shared alias DocumentScalarValue => Integer|Float|String|Boolean|Null;
 
-shared abstract class AField(name, alias_)
+shared interface DirectivesPossible
+{
+    shared formal [Directive+]? directives;
+}
+
+shared class Field(name, alias_=null, arguments_=null, directives=null, selectionSet=null)
+    satisfies DirectivesPossible
 {
     shared String name;
     assertGQLName(name);
@@ -84,21 +90,12 @@ shared abstract class AField(name, alias_)
 
     shared String responseKey => if (exists a = alias_) then a else name;
 
-    shared formal Map<String, Anything> arguments;
+    {Argument+}? arguments_;
+    shared Map<String, Anything> arguments = if (exists arguments_) then map(arguments_.map((arg)=>arg.name->arg.value_)) else emptyMap;
 
-    shared formal [Selection+]? selectionSet;
-}
-shared class Field(name, alias_=null, arguments_=null, directives=null, selectionSet=null)
-    extends AField(name, alias_)
-{
-    String name;
-    String? alias_;
+    shared actual [Directive+]? directives;
 
-    [Argument+]? arguments_;
-    shared actual Map<String, Anything> arguments = if (exists arguments_) then map(arguments_.map((arg)=>arg.name->arg.value_)) else emptyMap;
-    shared [Directive+]? directives;
-
-    shared actual [Selection+]? selectionSet;
+    shared [Selection+]? selectionSet;
 }
 
 shared class Argument(name, value_)
@@ -109,25 +106,30 @@ shared class Argument(name, value_)
     shared Anything value_;
 }
 
-shared class Directive()
+shared class Directive(name, arguments)
 {
+    shared String name;
+    assertGQLName(name);
 
+    shared [Argument+]? arguments;
 }
 
 shared abstract class Fragment(selectionSet, typeCondition, directives)
+    satisfies DirectivesPossible
 {
     shared [Selection+] selectionSet;
     shared String? typeCondition;
-    shared [Directive+]? directives;
+    shared actual [Directive+]? directives;
 }
 
 shared class FragmentSpread(name, directives=null)
+    satisfies DirectivesPossible
 {
     shared String name;
     assertGQLName(name);
     assert (name != "on");//FIXME
 
-    shared [Directive*]? directives;
+    shared actual [Directive+]? directives;
 }
 
 shared class InlineFragment(selectionSet, typeCondition = null, directives = null)

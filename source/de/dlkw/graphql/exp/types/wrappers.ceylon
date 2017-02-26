@@ -1,8 +1,9 @@
-import de.dlkw.graphql.exp {
-    Var
-}
 import ceylon.language.meta {
     type
+}
+
+import de.dlkw.graphql.exp {
+    Var
 }
 shared interface GQLWrapperType<out Inner, out InnerName>
     satisfies Named<Null>
@@ -10,6 +11,7 @@ shared interface GQLWrapperType<out Inner, out InnerName>
     given InnerName of String | Null
 {
     shared formal Inner inner;
+    shared Inner ofType => inner;
 }
 
 shared class GQLNonNullType<out Inner, out InnerName>(inner)
@@ -19,7 +21,6 @@ shared class GQLNonNullType<out Inner, out InnerName>(inner)
     given InnerName of String | Null
 {
     shared actual Inner inner;
-    shared Inner ofType => inner;
 
     shared actual String wrappedName => "``inner.wrappedName``!";
 
