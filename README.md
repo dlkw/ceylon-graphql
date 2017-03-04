@@ -36,5 +36,5 @@ The schemas tested so far provide the correct documentation when examined using 
 
 ## Extensions to the GraphQL specification
 
-The error structure includes a "path" field that shows the exact place of the field in the result data that raised an
+The error structure includes a `path` field that shows the exact place of the field in the result data that raised an
 error, including index number of items in LISTs in square brackets like `toplevel/list[0]/leaf`.
