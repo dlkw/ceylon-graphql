@@ -44,7 +44,8 @@ import de.dlkw.graphql.exp.types {
     GQLInputNonNullType,
     GQLWrapperType,
     gqlBooleanType,
-    GQLTypeReference
+    GQLTypeReference,
+    resolveAllTypeReferences
 }
 
 Logger log = logger(`package`);
@@ -62,7 +63,7 @@ class IntrospectionSupport(types, queryType, mutationType, directives)
     shared {GQLType<String>+} types;
     shared GQLObjectType queryType;
     shared GQLObjectType? mutationType;
-    shared Empty directives;
+    shared {DirectiveDefinition*} directives;
 }
 
 shared class Schema(queryRoot, mutationRoot)
@@ -75,8 +76,8 @@ shared class Schema(queryRoot, mutationRoot)
     shared GQLObjectType? mutationRoot;
 
     shared {DirectiveDefinition*} directiveDefinitions= [
-        DirectiveDefinition("skip", "builtin skip directive", ["if" -> ArgumentDefinition(GQLInputNonNullType(gqlBooleanType))]),
-        DirectiveDefinition("include", "builtin include directive", ["if" -> ArgumentDefinition(GQLInputNonNullType(gqlBooleanType))])
+        DirectiveDefinition("skip", "builtin skip directive", [DirectiveLocation.field, DirectiveLocation.fragmentSpread, DirectiveLocation.inlineFragment], ["if" -> ArgumentDefinition(GQLInputNonNullType(gqlBooleanType))]),
+        DirectiveDefinition("include", "builtin include directive", [DirectiveLocation.field, DirectiveLocation.fragmentSpread, DirectiveLocation.inlineFragment], ["if" -> ArgumentDefinition(GQLInputNonNullType(gqlBooleanType))])
     ];
 
     //#####################
@@ -158,6 +159,8 @@ shared class Schema(queryRoot, mutationRoot)
     if (exists mutationRoot) {
         internalRegisterType(mutationRoot);
     }
+//    resolveAllTypeReferences(queryRoot, types.mapItems((key, item) => if (is GQLObjectType item) item else null));
+    resolveAllTypeReferences(queryRoot, map({ for (k->i in types) if (is GQLObjectType i) k->i }));
     internalRegisterType(introspection.typeSchema);
 
     GQLField introspectionFieldSchema = GQLField {
@@ -424,7 +427,7 @@ shared class Schema(queryRoot, mutationRoot)
             }
 
             if (topLevel && (fieldName == "__schema" || fieldName == "__type")) {
-                usedObjectValue = IntrospectionSupport(registeredTypes, query__, mutationRoot, []);
+                usedObjectValue = IntrospectionSupport(registeredTypes, query__, mutationRoot, directiveDefinitions);
             }
             else {
                 usedObjectValue = objectValue;

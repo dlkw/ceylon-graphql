@@ -51,7 +51,7 @@ shared class GQLListType<out Inner, out InnerName>(inner)
 
 shared class GQLInputNonNullType<out Inner, out InnerName, out Coerced>(inner)
     extends GQLNonNullType<Inner, InnerName>(inner)
-    satisfies GQLWrapperType<Inner, InnerName> & InputCoercingBase<InnerName, Coerced>
+    satisfies GQLWrapperType<Inner, InnerName> & InputCoercingBase<Null, Coerced>
     given Inner satisfies GQLNullableType<InnerName> & InputCoercingBase<InnerName, Coerced>
     given InnerName of String | Null
     given Coerced satisfies Object
@@ -64,7 +64,7 @@ shared class GQLInputNonNullType<out Inner, out InnerName, out Coerced>(inner)
 
 shared class GQLInputListType<out Inner, out InnerName, out Coerced>(inner)
     extends GQLListType<Inner, InnerName>(inner)
-    satisfies GQLWrapperType<Inner, InnerName> & InputCoercingBase<InnerName, {Coerced?|Var*}>
+    satisfies GQLWrapperType<Inner, InnerName> & InputCoercingBase<Null, {Coerced?|Var*}>
     given Inner satisfies GQLType<InnerName> & InputCoercingBase<InnerName, Coerced>
     given InnerName of String | Null
     given Coerced satisfies Object

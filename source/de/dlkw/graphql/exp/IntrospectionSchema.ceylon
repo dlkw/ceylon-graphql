@@ -236,13 +236,13 @@ object introspection
             },
             GQLField {
                 name = "locations";
-                type = GQLNonNullType<GQLListType<GQLNonNullType<GQLEnumType<>, String>, Null>, Null>(GQLListType(GQLNonNullType(GQLEnumType<>("__DirectiveLocation", [
-                    GQLEnumValue<>("QUERY"),
-                    GQLEnumValue<>("MUTATION"),
-                    GQLEnumValue<>("FIELD"),
-                    GQLEnumValue<>("FRAGMENT_DEFINITION"),
-                    GQLEnumValue<>("FRAGMENT_SPREAD"),
-                    GQLEnumValue<>("INLINE_FRAGMENT")
+                type = GQLNonNullType<GQLListType<GQLNonNullType<GQLEnumType<DirectiveLocation>, String>, Null>, Null>(GQLListType(GQLNonNullType(GQLEnumType("__DirectiveLocation", [
+                    GQLEnumValue("QUERY", DirectiveLocation.query),
+                    GQLEnumValue("MUTATION", DirectiveLocation.mutation),
+                    GQLEnumValue("FIELD", DirectiveLocation.field),
+                    GQLEnumValue("FRAGMENT_DEFINITION", DirectiveLocation.fragmentDefinition),
+                    GQLEnumValue("FRAGMENT_SPREAD", DirectiveLocation.fragmentSpread),
+                    GQLEnumValue("INLINE_FRAGMENT", DirectiveLocation.inlineFragment)
                 ]))));
             },
             GQLField {
