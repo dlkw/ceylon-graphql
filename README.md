@@ -26,7 +26,7 @@ The Validation phase is not implemented at all yet, so please be careful.
 This is pretty much working, using serial execution only.
 At the moment, it's a big paradigm issue how to implement some framework or library in Ceylon:
 Should it generally be implemented using some async/event loop approach or just in a "JVM conventional"
-call-and-return-result way? This may be discussed in issue #3.
+call-and-return-result way? This may be discussed in #3
 
 In several places errors during execution just throw instead of nicely presenting the error in the GraphQL response. This is
 the next thing to tackle.
