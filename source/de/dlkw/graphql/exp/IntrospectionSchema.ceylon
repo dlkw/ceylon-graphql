@@ -11,7 +11,8 @@ import de.dlkw.graphql.exp.types {
     TypeKind,
     GQLTypeReference,
     resolveAllTypeReferences,
-    GQLInputField
+    GQLInputField,
+    Undefined
 }
 
 object introspection
@@ -47,7 +48,10 @@ object introspection
     String? defaultValueToString(Anything defaultValue)
     {
         // FIXME need to do this depending on argumentDefinition.type, not value type
-        if (is Map<String, Anything> defaultValue) {
+        if (is Undefined defaultValue) {
+            return null;
+        }
+        else if (is Map<String, Anything> defaultValue) {
             return "{``",".join({for (n->v in defaultValue) "``n``:``defaultValueToString(v) else "null" ``"})``}";
         }
         else if (is String defaultValue) {
