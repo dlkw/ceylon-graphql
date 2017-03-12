@@ -2,7 +2,8 @@ import ceylon.test {
     test,
     assertEquals,
     assertTrue,
-    assertNull
+    assertNull,
+    beforeTestRun
 }
 
 import de.dlkw.graphql.exp {
@@ -22,8 +23,19 @@ import de.dlkw.graphql.exp.types {
 }
 import ceylon.logging {
     addLogWriter,
-    writeSimpleLog
+    writeSimpleLog,
+    debug,
+    defaultPriority,
+    info
 }
+
+beforeTestRun
+void setupLogging()
+{
+    addLogWriter(writeSimpleLog);
+    defaultPriority = info;
+}
+
 
 test
 shared void singleIntMayBeNullAndIsNotNull() {

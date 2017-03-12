@@ -47,6 +47,10 @@ import de.dlkw.graphql.exp.types {
     GQLTypeReference,
     resolveAllTypeReferences
 }
+import ceylon.random {
+    DefaultRandom,
+    Random
+}
 
 Logger log = logger(`package`);
 
@@ -133,7 +137,7 @@ shared class Schema(queryRoot, mutationRoot, typeResolvers = [])
             if (!type === registeredType) {
                 throw InvalidSchemaException("Duplicate definition of type ``name``");
             }
-            log.info("type ``name`` already registered");
+            log.debug("type ``name`` already registered");
             alreadyRegistered = true;
         } else {
             log.info("registering type ``name``");
@@ -326,7 +330,8 @@ shared class Schema(queryRoot, mutationRoot, typeResolvers = [])
 
     [Location]? singleOptionalLocation(Location? location) => if (exists location) then [location] else null;
 
-    "Returns [[null]] to indicate some errors happened."
+    "Returns [[null]] to indicate some errors happened. These error(s) will already be appended
+     to the [[errors]] argument then."
     Map<String, Object?> | Null coerceArgumentValues(objectType, field, variableValues, errors, path)
     {
         GQLAbstractObjectType objectType;
@@ -340,6 +345,7 @@ shared class Schema(queryRoot, mutationRoot, typeResolvers = [])
         variable [<String->Object?>*] coercedValues = [];
 
         value fieldType = objectType.fields[field.name];
+        // will pass if validation was successful
         assert (exists fieldType);
 
         variable Boolean hasErrors = false;
@@ -632,6 +638,7 @@ shared class Schema(queryRoot, mutationRoot, typeResolvers = [])
         }
 
         value fieldDefinition = objectType.fields[fieldName];
+        // will pass if validation was successful
         assert (exists fieldDefinition);
 
         if (exists resolver = fieldDefinition.resolver) {
@@ -709,10 +716,14 @@ shared class Schema(queryRoot, mutationRoot, typeResolvers = [])
             return (inNonNull) then nullForError;
         }
 
+        Random random = DefaultRandom();
         Anything | NullForError raiseInternalError(String message, [Location+]? locations, Throwable? cause=null)
         {
-            log.error(message);
-            errors.add(FieldError("internal error", locations, path));
+            value code = random.nextInteger(#1000000000000);
+            value tmp = ("000000000000" + Integer.format(code, 16));
+            value stringCode = tmp[tmp.size-12:12];
+            log.error(message, cause);
+            errors.add(FieldError("internal error (log code ``stringCode``)", locations, path));
             return (inNonNull) then nullForError;
         }
 
@@ -846,28 +857,13 @@ shared class Schema(queryRoot, mutationRoot, typeResolvers = [])
         return resolvedType;
     }
 
-    /*
-    GQLObjectType<Anything> resolveAbstractType(GQLInterfaceType | GQLUnionType fieldType, Anything result)
-    {
-        return nothing;
-    }
-    */
-
     [Selection+] mergeSelectionSets([Field+] fields)
     {
-        variable [Selection*] x = [];
-        for (field in fields) {
-            value fss = field.selectionSet;
-            if (is Null fss) {
-                print("***check me! selectionset null");
-                continue;
-            }
-            x = x.append(fss);
+        value merged = fields.flatMap((field) => field.selectionSet else []).sequence();
+        if (is Empty merged) {
+            throw AssertionError("No fields in merged selection set (was no validation done?)");
         }
-        value y = fields.flatMap((field) => field.selectionSet else []);
-        assert(y.sequence() == x.sequence());
-        assert (nonempty yy = y.sequence());
-        return yy;
+        return merged;
     }
 }
 
@@ -1026,15 +1022,19 @@ class RestIterable<Element>(Iterator<Element> startedIterator)
     };
 }
 
-FunctionDeclaration? declGetAttribute = `interface Class`.getMemberDeclaration<FunctionDeclaration>("getAttribute");
+FunctionDeclaration getAssertedDeclaration(String memberName)
+{
+    value declaration = `interface Class`.getMemberDeclaration<FunctionDeclaration>(memberName);
+    assert (exists declaration);
+    return declaration;
+}
+
+FunctionDeclaration declarationOfGetAttribute = getAssertedDeclaration("getAttribute");
+
 Anything getDyn(Object obj, String name)
 {
-    // could be moved outside this function and evaluated only once
-    //value declGetAttribute = `interface Class`.getMemberDeclaration<FunctionDeclaration>("getAttribute");
-    assert (exists declGetAttribute);
-
     value t = type(obj);
-    value methodGetAttribute = declGetAttribute.memberApply<Nothing, Attribute<>?, [String]>(type(t), t);
+    value methodGetAttribute = declarationOfGetAttribute.memberApply<Nothing, Attribute<>?, [String]>(type(t), t);
     value getAttribute = methodGetAttribute.bind(t);
 
     value attribute = getAttribute(name);

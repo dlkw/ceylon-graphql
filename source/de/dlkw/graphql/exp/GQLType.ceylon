@@ -9,6 +9,6 @@ shared class QueryError(String message, [Location+]? locations)
 
 shared class Location(shared Integer line, shared Integer column)
 {
-    assert (line >= 0);
-    assert (column >= 0);
+    assert (line > 0);
+    assert (column > 0);
 }
