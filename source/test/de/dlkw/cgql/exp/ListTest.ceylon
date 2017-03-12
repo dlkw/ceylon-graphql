@@ -2,7 +2,8 @@ import ceylon.test {
     assertNull,
     assertEquals,
     assertTrue,
-    test
+    test,
+    fail
 }
 import de.dlkw.graphql.exp {
     OperationDefinition,
@@ -12,8 +13,8 @@ import de.dlkw.graphql.exp {
     Schema,
     ResolvedNotIterableError,
     FieldNullError,
-    ListCompletionError,
-    ResultCoercionError
+    ResultCoercionError,
+    ListCompletionError
 }
 import ceylon.logging {
     addLogWriter,
@@ -92,7 +93,7 @@ shared void listWithNullableIntsIsErrorNonNull() {
         GQLField {
             name = "f1";
             type = GQLListType(gqlIntType);
-            resolver = (a, e) => {5/0, 6};
+            resolver = (a, e) => {5/0, 6, 7/0};
         }
     });
 
@@ -110,9 +111,11 @@ shared void listWithNullableIntsIsErrorNonNull() {
     assertTrue(data.defines("f1"));
     assert (is Null f1 = data["f1"]);
 
-    assertEquals(errors.size, 1);
+    assertEquals(errors.size, 2);
     assert (is ListCompletionError error0 = errors[0]);
-    assertEquals(error0.stringPath, "f1");
+    assertEquals(error0.stringPath, "f1[0]");
+    assert (is ListCompletionError error1 = errors[1]);
+    assertEquals(error1.stringPath, "f1[2]");
 }
 
 test

@@ -77,11 +77,13 @@ shared interface DirectivesPossible
     shared formal [Directive+]? directives;
 }
 
-shared class Field(name, alias_=null, arguments_=null, directives=null, selectionSet=null)
+shared class Field(name, location=null, alias_=null, arguments_=null, directives=null, selectionSet=null)
     satisfies DirectivesPossible
 {
     shared String name;
     assertGQLName(name);
+
+    shared Location? location;
 
     shared String? alias_;
     if (exists alias_) {
@@ -98,62 +100,75 @@ shared class Field(name, alias_=null, arguments_=null, directives=null, selectio
     shared [Selection+]? selectionSet;
 }
 
-shared class Argument(name, value_)
+shared class Argument(name, value_, location=null)
 {
     shared String name;
     assertGQLName(name);
+
+    shared Location? location;
 
     shared Anything value_;
 }
 
-shared class Directive(name, arguments)
+shared class Directive(name, location, arguments)
 {
     shared String name;
     assertGQLName(name);
 
+    shared Location? location;
+
     shared [Argument+]? arguments;
 }
 
-shared abstract class Fragment(selectionSet, typeCondition, directives)
+shared abstract class Fragment(selectionSet, typeCondition, directives, location)
     satisfies DirectivesPossible
 {
+    shared Location? location;
+
     shared [Selection+] selectionSet;
     shared String? typeCondition;
     shared actual [Directive+]? directives;
 }
 
-shared class FragmentSpread(name, directives=null)
+shared class FragmentSpread(name, location=null, directives=null)
     satisfies DirectivesPossible
 {
     shared String name;
     assertGQLName(name);
     assert (name != "on");//FIXME
 
+    shared Location? location;
+
     shared actual [Directive+]? directives;
 }
 
-shared class InlineFragment(selectionSet, typeCondition = null, directives = null)
-    extends Fragment(selectionSet, typeCondition, directives)
+shared class InlineFragment(selectionSet, location=null, typeCondition = null, directives = null)
+    extends Fragment(selectionSet, typeCondition, directives, location)
 {
+    Location? location;
+
     [Selection+] selectionSet;
     String? typeCondition;
     [Directive+]? directives;
 }
 
-shared class FragmentDefinition(name, selectionSet, typeCondition, directives = null)
-    extends Fragment(selectionSet, typeCondition, directives)
+shared class FragmentDefinition(name, selectionSet, typeCondition, location=null, directives = null)
+    extends Fragment(selectionSet, typeCondition, directives, location)
 {
     shared String name;
     [Selection+] selectionSet;
     String? typeCondition;
     [Directive+]? directives;
+
+    Location? location;
 }
 
 Document doci()
 {
     value doc = Document([OperationDefinition(OperationType.query, [Field{
                 name="fA";
-                selectionSet = [Field("f2")];
+                selectionSet = [Field("f2", null)];
+                location=null;
     }])]);
     return doc;
 }
@@ -175,20 +190,25 @@ shared class OVal(Map<String, InputValue> val) extends Vall<OVal, Map<String, In
 */
 
 shared alias DocumentValue<out V> => String | Integer | Float | Boolean | EnumLiteral | IObject<V> | Null | IList<V> | V;
-shared class EnumLiteral(value_)
+shared class EnumLiteral(value_, location)
 {
     shared String value_;
-    assert (!value_ in {"null, true. false"});
+    assert (!value_ in {"null", "true", "false"});
+
+    shared Location? location;
 
     string => "enum literal \"``value_``\"";
 }
 
-shared class IObject<out  V>({<String->DocumentValue<V>>*} fields)
+shared class IObject<out  V>({<String->DocumentValue<V>>*} fields, location)
     satisfies Map<String, DocumentValue<V>>
     given V satisfies Var
 {
     import ceylon.language { outerMap = map }
     value store = outerMap(fields);
+
+    shared Location? location;
+
     shared actual Boolean defines(Object key) => store.defines(key);
 
     shared actual DocumentValue<V>? get(Object key) => store.get(key);
@@ -200,10 +220,12 @@ shared class IObject<out  V>({<String->DocumentValue<V>>*} fields)
     shared actual Boolean equals(Object that) => store.equals(that);
 }
 
-shared class IList<out V>(Sequential<DocumentValue<V>> items)
+shared class IList<out V>(Sequential<DocumentValue<V>> items, location)
     satisfies List<DocumentValue<V>>
     given V satisfies Var
 {
+    shared Location? location;
+
     // TODO is this enough to override performance-wise?
     getFromFirst = items.getFromFirst;
     lastIndex => items.lastIndex;
@@ -212,7 +234,8 @@ shared class IList<out V>(Sequential<DocumentValue<V>> items)
     equals = items.equals;
 }
 
-shared class Var(name)
+shared class Var(name, location=null)
 {
+    shared Location? location;
     shared String name;
 }

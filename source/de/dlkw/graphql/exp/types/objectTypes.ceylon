@@ -204,7 +204,8 @@ extends GQLAbstractType(TypeKind.union, name, description)
 
 shared interface TypeResolver
 {
-    shared formal GQLObjectType? resolveAbstractType(GQLAbstractType abstractType, Object objectValue);
+    shared formal {GQLObjectType*} knownTypes;
+    shared formal String? resolveAbstractType(GQLAbstractType abstractType, Object objectValue);
 }
 
 Field duplicateDetector<Field>(Field earlier, Field later)

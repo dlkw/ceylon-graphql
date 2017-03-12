@@ -83,7 +83,9 @@ JsonArray mkJsonErrors({GQLError*} errors)
             if (is FieldError error) {
                 return JsonObject({
                     "message"->error.message,
-                    if (exists locations = error.locations) then "locations"->locations else null,
+                    if (exists locations = error.locations) then "locations"->JsonArray({
+                        for (location in locations) JsonObject({"line"->location.line, "column"->location.column})
+                    }) else null,
                     "path"->error.stringPath
                 }.coalesced);
             }
@@ -246,7 +248,7 @@ Document introType()
                 selectionSet = [
                     Field("kind"),
                     Field("name"),
-                    Field("kind", "k")
+                    Field("kind", null, "k")
                 ];
             },
             Field{"__type";
@@ -273,7 +275,7 @@ Document introSchema()
                             Field("kind"),
                             Field("name"),
                             Field("description"),
-                            Field("fields", null, [Argument("includeDeprecated", true)], null, [
+                            Field("fields", null, null, [Argument("includeDeprecated", true)], null, [
                                 Field("name"),
                                 Field("description"),
                                 Field{"args";selectionSet=[
@@ -282,7 +284,7 @@ Document introSchema()
                                     Field("type"),
                                     Field("defaultValue")
                                 ];},
-                                Field("type", null, null, null, [
+                                Field("type", null, null, null, null, [
                                     Field("name"),
                                     Field("kind"),
                                     Field{"ofType";selectionSet=[Field("name")];}
@@ -296,7 +298,7 @@ Document introSchema()
                             Field{"possibleTypes";selectionSet=[
                                 Field("name")
                             ];},
-                            Field("enumValues", null, [Argument("includeDeprecated", false)], null, [
+                            Field("enumValues", null, null, [Argument("includeDeprecated", false)], null, [
                                 Field("name"),
                                 Field("description"),
                                 Field("isDeprecated"),

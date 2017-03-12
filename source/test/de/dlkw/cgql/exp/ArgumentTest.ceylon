@@ -37,7 +37,7 @@ shared void intArgumentWithIntValue() {
 
     value schema = Schema(queryRoot, null);
 
-    value document = Document([OperationDefinition(OperationType.query, [Field("f1", null, [Argument("arg1", 88)])])]);
+    value document = Document([OperationDefinition(OperationType.query, [Field("f1", null, null, [Argument("arg1", 88, null)])])]);
 
     value result = schema.executeRequest(document);
     assertTrue(result.includedExecution);
@@ -139,7 +139,7 @@ shared void intArgumentWithVariable() {
 
     value schema = Schema(queryRoot, null);
 
-    value document = Document([OperationDefinition(OperationType.query, [Field("f1", null, [Argument("arg1", Var("var1"))])], null,
+    value document = Document([OperationDefinition(OperationType.query, [Field("f1", null, null, [Argument("arg1", Var("var1"))])], null,
         {"var1"->VariableDefinition(gqlIntType, 3)}
     )]);
 

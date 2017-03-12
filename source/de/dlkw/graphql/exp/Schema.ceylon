@@ -66,7 +66,13 @@ class IntrospectionSupport(types, queryType, mutationType, directives)
     shared {DirectiveDefinition*} directives;
 }
 
-shared class Schema(queryRoot, mutationRoot)
+shared class InvalidSchemaException(String? description=null, Throwable? cause=null)
+    extends Exception(description, cause)
+{}
+
+
+throws(`class InvalidSchemaException`)
+shared class Schema(queryRoot, mutationRoot, typeResolvers = [])
     satisfies TypeRegistry
 {
     "The root type for query operations."
@@ -75,6 +81,7 @@ shared class Schema(queryRoot, mutationRoot)
     "The root type for mutation operations."
     shared GQLObjectType? mutationRoot;
 
+    // FIXME need not be publicly available
     shared {DirectiveDefinition*} directiveDefinitions= [
         DirectiveDefinition("skip", "builtin skip directive", [DirectiveLocation.field, DirectiveLocation.fragmentSpread, DirectiveLocation.inlineFragment], ["if" -> ArgumentDefinition(GQLInputNonNullType(gqlBooleanType))]),
         DirectiveDefinition("include", "builtin include directive", [DirectiveLocation.field, DirectiveLocation.fragmentSpread, DirectiveLocation.inlineFragment], ["if" -> ArgumentDefinition(GQLInputNonNullType(gqlBooleanType))])
@@ -124,7 +131,7 @@ shared class Schema(queryRoot, mutationRoot)
         value registeredType = types[name];
         if (exists registeredType) {
             if (!type === registeredType) {
-                throw ; // TODO
+                throw InvalidSchemaException("Duplicate definition of type ``name``");
             }
             log.info("type ``name`` already registered");
             alreadyRegistered = true;
@@ -211,10 +218,12 @@ shared class Schema(queryRoot, mutationRoot)
         return registeredTypes.find((t) => t.name == name);
     }
 
-    Map<String, TypeResolver> typeResolvers = emptyMap;
-    TypeResolver unspecificTypeResolver = object satisfies TypeResolver{
-        shared actual GQLObjectType? resolveAbstractType(GQLAbstractType abstractType, Object objectValue) => if (is GQLObjectType t = lookupType("OtherType")) then t else null;
-    };
+    [TypeResolver*] typeResolvers;
+    for (typeResolver in typeResolvers) {
+        for (knownType in typeResolver.knownTypes) {
+            internalRegisterType(knownType);
+        }
+    }
 
     shared ExtResult executeRequest(document, variableValues = emptyMap, operationName=null, rootValue=object{}, inputDecoder = identity<Object>, executor=normalExecutor)
     {
@@ -230,16 +239,19 @@ shared class Schema(queryRoot, mutationRoot)
 
         value operationDefinition = document.operationDefinition(operationName);
         if (is Null operationDefinition) {
-            throw AssertionError("No matching operation found ``
-                if (exists operationName)
-                    then "by name \"`` operationName ``\""
-                    else "(need to specify name)"
-                ``.");
+            return ExtResultImplTODO(false, null, [
+                QueryError("No matching operation found in document ``
+                    if (exists operationName)
+                        then "by name \"`` operationName ``\""
+                        else "(need to specify name)"
+                    ``.",
+                    null
+                )]);
         }
 
         value errors = ArrayList<GQLError>();
         value coercedVariables = coerceVariableValues(operationDefinition, variableValues, inputDecoder, errors);
-        if (is QueryError coercedVariables) {
+        if (is Null coercedVariables) {
             return ExtResultImplTODO(false, null, errors);
         }
 
@@ -252,7 +264,9 @@ shared class Schema(queryRoot, mutationRoot)
         }
         case (OperationType.mutation) {
             if (is Null mutationRoot) {
-                throw AssertionError("Mutations are not supported.");
+                return ExtResultImplTODO(false, null, [
+                    QueryError("Mutations are not supported by the schema.", null)
+                ]);
             }
             rootType = mutationRoot;
             topLevelExecutor = serialExecutor;
@@ -265,7 +279,7 @@ shared class Schema(queryRoot, mutationRoot)
         return ExtResultImplTODO(true, result, errors);
     }
 
-    Map<String, Object?> | QueryError coerceVariableValues(operationDefinition, variableValues, inputDecoder, errors)
+    Map<String, Object?> | Null coerceVariableValues(operationDefinition, variableValues, inputDecoder, errors)
     {
         OperationDefinition operationDefinition;
         Map<String, Anything>? variableValues;
@@ -305,12 +319,15 @@ shared class Schema(queryRoot, mutationRoot)
             }
         }
         if (hasErrors) {
-            return QueryError();
+            return null;
         }
         return map(coercedValues);
     }
 
-    Map<String, Object?> | FieldError coerceArgumentValues(objectType, field, variableValues, errors, path)
+    [Location]? singleOptionalLocation(Location? location) => if (exists location) then [location] else null;
+
+    "Returns [[null]] to indicate some errors happened."
+    Map<String, Object?> | Null coerceArgumentValues(objectType, field, variableValues, errors, path)
     {
         GQLAbstractObjectType objectType;
         Field field;
@@ -342,7 +359,8 @@ shared class Schema(queryRoot, mutationRoot)
                         value defaultValue = argumentDefinition.defaultValue;
                         if (is Undefined defaultValue) {
                             if (is GQLNonNullType<GQLType<Anything>, Anything> argumentType = argumentDefinition.type) {
-                                errors.add(ArgumentCoercionError(path, argumentName));
+
+                                errors.add(ArgumentCoercionError(singleOptionalLocation(value_.location), path, argumentName));
                                 hasErrors = true;
                             }
                             else {
@@ -358,7 +376,9 @@ shared class Schema(queryRoot, mutationRoot)
                     value providedValue = argumentDefinition.type.coerceInput(value_);
                     if (is CoercionError providedValue) {
                         //g
-                        errors.add(ArgumentCoercionError(path, argumentName));
+                        // FIXME get location of value here
+                        //errors.add(ArgumentCoercionError(singleOptionalLocation(value_.location), path, argumentName));
+                        errors.add(ArgumentCoercionError(null, path, argumentName));
                         hasErrors = true;
                     }
                     else {
@@ -372,7 +392,7 @@ shared class Schema(queryRoot, mutationRoot)
                 value defaultValue = argumentDefinition.defaultValue;
                 if (is Undefined defaultValue) {
                     if (is GQLNonNullType<GQLType<Anything>, Anything> argumentType = argumentDefinition.type) {
-                        errors.add(ArgumentCoercionError(path, argumentName));
+                        errors.add(ArgumentCoercionError(singleOptionalLocation(field.location), path, argumentName));
                         hasErrors = true;
                         continue;
                     }
@@ -384,7 +404,7 @@ shared class Schema(queryRoot, mutationRoot)
             }
         }
         if (hasErrors) {
-            return FieldError("could not coerce arguments", path);
+            return null;
         }
         return map(coercedValues);
     }
@@ -442,7 +462,7 @@ shared class Schema(queryRoot, mutationRoot)
             }
         }
         if (hasFieldErrors) {
-            return NullForError();
+            return nullForError;
         }
         return resultMap;
     }
@@ -563,7 +583,7 @@ shared class Schema(queryRoot, mutationRoot)
     "Returns type [[Null]], [[Integer]], [[Float]], [[String]], [[Boolean]],
      or a [[List]] of these 7 types,
      or a [[Map]] mapping Strings to any of these 7 types.
-     Returns [[NullForError]] if the executed field gets a null value because of error propagation
+     Returns [[nullForError]] if the executed field gets a null value because of error propagation
      from a field error in a non-nullable field in [[fields]]."
     Anything | NullForError executeField(objectType, objectValue, fieldType, fields, variableValues, lookupFragmentDefinition, errors, path, executor)
     {
@@ -584,15 +604,15 @@ shared class Schema(queryRoot, mutationRoot)
         Field field = fields.first;
 
         value argumentValues = coerceArgumentValues(objectType, field, variableValues, errors, path);
-        if (is FieldError argumentValues) {
+        if (is Null argumentValues) {
             return null;
         }
-        value resolvedValue = resolveFieldValue(objectType, objectValue, field.name, argumentValues, errors, path);
+        value resolvedValue = resolveFieldValue(objectType, objectValue, field.name, argumentValues, errors, path, field.location);
         // a field error from resolution will be converted to null or propagated up by the completeValues call
-        return completeValues(fieldType, fields, resolvedValue, variableValues, lookupFragmentDefinition, errors, path, executor);
+        return completeValues(fieldType, fields, resolvedValue, variableValues, lookupFragmentDefinition, errors, path, field.location, executor);
     }
 
-    Anything | ResolvingError resolveFieldValue(objectType, objectValue, fieldName, argumentValues, errors, path)
+    Anything | ResolutionError resolveFieldValue(objectType, objectValue, fieldName, argumentValues, errors, path, fieldLocation)
     {
         GQLAbstractObjectType objectType;
         Anything objectValue;
@@ -601,6 +621,8 @@ shared class Schema(queryRoot, mutationRoot)
 
         ListMutator<FieldError> errors;
         [String, <String|Integer>*] path;
+
+        Location? fieldLocation;
 
         log.debug("resolving ``path``");
 
@@ -618,7 +640,7 @@ shared class Schema(queryRoot, mutationRoot)
             }
             catch (Throwable throwable) {
                 log.error("err: ", throwable);
-                value error = ResolvingError(path);
+                value error = ResolutionError(singleOptionalLocation(fieldLocation), path);
                 errors.add(error);
                 return error;
             }
@@ -632,7 +654,7 @@ shared class Schema(queryRoot, mutationRoot)
         }
     }
 
-    Anything | NullForError completeValues(fieldType, fields, result, variableValues, lookupFragmentDefinition, errors, path, executor)
+    Anything | NullForError completeValues(fieldType, fields, result, variableValues, lookupFragmentDefinition, errors, path, Location? fieldLocation, executor)
     {
         GQLType<String?> fieldType;
         [Field+] fields;
@@ -649,24 +671,24 @@ shared class Schema(queryRoot, mutationRoot)
 
         if (is GQLNonNullType<GQLType<String?>, Anything> fieldType) {
             if (is FieldError result) {
-                return NullForError();
+                return nullForError;
             }
 
-            value completedResult = innerCompleteValues(fieldType.inner, fields, result, variableValues, lookupFragmentDefinition, true, errors, path, executor);
+            value completedResult = innerCompleteValues(fieldType.inner, fields, result, variableValues, lookupFragmentDefinition, true, errors, path, fieldLocation, executor);
             if (!is NullForError completedResult, is Null v = completedResult) {
                 log.error("resolved a null value for non-null typed field ``path``");
-                value error = FieldNullError(path);
+                value error = FieldNullError(singleOptionalLocation(fieldLocation), path);
                 errors.add(error);
-                return NullForError();
+                return nullForError;
             }
             return completedResult;
         }
 
-        value completedResult = innerCompleteValues(fieldType, fields, result, variableValues, lookupFragmentDefinition, false, errors, path, executor);
+        value completedResult = innerCompleteValues(fieldType, fields, result, variableValues, lookupFragmentDefinition, false, errors, path, fieldLocation, executor);
         return completedResult;
     }
 
-    Anything | NullForError innerCompleteValues(fieldType, fields, result, variableValues, lookupFragmentDefinition, inNonNull, errors, path, executor)
+    Anything | NullForError innerCompleteValues(fieldType, fields, result, variableValues, lookupFragmentDefinition, inNonNull, errors, path, Location? fieldLocation, executor)
     {
         GQLType<String?> fieldType;
         [Field+] fields;
@@ -684,14 +706,21 @@ shared class Schema(queryRoot, mutationRoot)
             return result;
         }
         if (is FieldError result) {
-            return (inNonNull) then NullForError();
+            return (inNonNull) then nullForError;
+        }
+
+        Anything | NullForError raiseInternalError(String message, [Location+]? locations, Throwable? cause=null)
+        {
+            log.error(message);
+            errors.add(FieldError("internal error", locations, path));
+            return (inNonNull) then nullForError;
         }
 
         switch (fieldType)
         case (is GQLListType<GQLType<String?>, Anything>) {
             if (!is Iterable<Anything> result) {
-                errors.add(ResolvedNotIterableError(path));
-                return (inNonNull) then NullForError();
+                errors.add(ResolvedNotIterableError(singleOptionalLocation(fieldLocation), path));
+                return (inNonNull) then nullForError;
             }
 
             // for convenience, use items of a map as list entries.
@@ -701,31 +730,48 @@ shared class Schema(queryRoot, mutationRoot)
 
             variable Boolean hasFieldErrors = false;
             MutableList<Anything> elementResults = ArrayList<Anything>();
-            try {
-                for (i->v in iterable.indexed) {
-                    value elementResult = completeValues(fieldType.inner, fields, v, variableValues, lookupFragmentDefinition, errors, path.withTrailing(i), executor);
-                    if (is NullForError elementResult) {
-                        hasFieldErrors = true;
-                    } else {
-                        elementResults.add(elementResult);
-                    }
+
+            // need to do weird loop to have access to index when iterating to the
+            // next item yields an exception.
+
+            variable Integer idx = -1;
+            value iterator = iterable.iterator();
+            while (true) {
+                ++idx;
+
+                Anything v;
+                try {
+                    v = iterator.next();
+                }
+                catch (Throwable t) {
+                    log.error("error iterating Iterable while creating GQLListValue", t);
+                    errors.add(ListCompletionError(if (exists fieldLocation) then [fieldLocation] else null, path.withTrailing(idx)));
+                    hasFieldErrors = true;
+                    continue;
+                }
+
+                if (is Finished v) {
+                    break;
+                }
+
+                value elementResult = completeValues(fieldType.inner, fields, v, variableValues, lookupFragmentDefinition, errors, path.withTrailing(idx), fieldLocation, executor);
+                if (is NullForError elementResult) {
+                    hasFieldErrors = true;
+                } else {
+                    elementResults.add(elementResult);
                 }
             }
-            catch (Throwable t) {
-                log.error("error iterating Iterable while creating GQLListValue", t);
-                errors.add(ListCompletionError(path));
-                return (inNonNull) then NullForError();
-            }
+
             if (hasFieldErrors) {
-                return (inNonNull) then NullForError();
+                return (inNonNull) then nullForError;
             }
             return elementResults.sequence();
         }
         case (is GQLScalarType<Anything, Nothing> | GQLEnumType<Anything>) {
             value coerced = fieldType.coerceResult(result);
             if (is CoercionError coerced) {
-                errors.add(ResultCoercionError(path, coerced));
-                return (inNonNull) then NullForError();
+                errors.add(ResultCoercionError(singleOptionalLocation(fieldLocation), path, coerced));
+                return (inNonNull) then nullForError;
             }
             return coerced;
         }
@@ -735,7 +781,14 @@ shared class Schema(queryRoot, mutationRoot)
                 objectType = fieldType;
             }
             else {
-                objectType = resolveAbstractType(fieldType, result);
+                value resolvedAbstractType = resolveAbstractType(fieldType, result);
+                if (is AbstractTypeResolutionError resolvedAbstractType) {
+                    value errMsg = if (exists message = resolvedAbstractType.message)
+                        then "Error resolving concrete type for ``result`` as ``fieldType.kind`` ``fieldType.name``: ``message``"
+                        else "Error resolving concrete type for ``result`` as ``fieldType.kind`` ``fieldType.name``";
+                    return raiseInternalError(errMsg, singleOptionalLocation(fieldLocation), resolvedAbstractType.cause);
+                }
+                objectType = resolvedAbstractType;
             }
             try {
                 value subSelectionSet = mergeSelectionSets(fields);
@@ -748,47 +801,46 @@ shared class Schema(queryRoot, mutationRoot)
                 return resultObjectValue;
             }
             catch (Throwable t) {
-                log.error("error completing object", t);
-                errors.add(FieldError("internal error", path));
-                return (inNonNull) then NullForError();
+                return raiseInternalError("error completing object", singleOptionalLocation(fieldLocation), t);
             }
         }
-        /*
-        case (is GQLInterfaceType | GQLUnionType) {
-            GQLObjectType objectType = resolveAbstractType(fieldType, result);
-            return a(fields, objectType, result);
-        }
-        */
         else {
-            throw AssertionError(fieldType.string);
+            return raiseInternalError("unexpected field type ``fieldType.string``", singleOptionalLocation(fieldLocation));
         }
     }
 
-    GQLObjectType resolveAbstractType(GQLAbstractType abstractType, Object objectValue)
+    class AbstractTypeResolutionError(shared String? message=null, shared Throwable? cause=null){}
+
+    GQLObjectType | AbstractTypeResolutionError resolveAbstractType(GQLAbstractType abstractType, Object objectValue)
     {
-        GQLType<String>? resolvedType;
-        if (exists typeResolver = typeResolvers[abstractType.name]) {
-            resolvedType = typeResolver.resolveAbstractType(abstractType, objectValue);
+        String? resolvedTypeName;
+        try {
+            resolvedTypeName = typeResolvers
+                .map((typeResolver) => typeResolver.resolveAbstractType(abstractType, objectValue))
+                .coalesced
+                .first;
         }
-        else {
-            resolvedType = unspecificTypeResolver.resolveAbstractType(abstractType, objectValue);
+        catch (Exception t) {
+            return AbstractTypeResolutionError("Exception calling type resolver", t);
         }
 
-        if (is Null resolvedType) {
-            throw AssertionError("could not determine concrete type for ``objectValue`` as ``""/*abstractType.kind*/ `` ``abstractType.name``"); // TODO
+        if (is Null resolvedTypeName) {
+            return AbstractTypeResolutionError();
         }
 
+        value resolvedType = lookupType(resolvedTypeName);
         if (!is GQLObjectType resolvedType) {
-            throw; // TODO
+            return AbstractTypeResolutionError("Resolved abstract type to type ``resolvedTypeName`` which is non-Object or not registered.");
         }
+
         if (is GQLInterfaceType abstractType) {
             if (!resolvedType.interfaces.contains(abstractType)) {
-                throw AssertionError("type ``resolvedType.name`` does not implement interface ``abstractType.name``"); // TODO
+                return AbstractTypeResolutionError("Resolved type ``resolvedType.name`` does not implement interface ``abstractType.name``");
             }
         }
         else {
             if (abstractType.types.contains(resolvedType)) {
-                throw AssertionError("type ``resolvedType.name`` does not occur in union ``abstractType.name``"); // TODO
+                return AbstractTypeResolutionError("Resolved type ``resolvedType.name`` does not occur in union ``abstractType.name``");
             }
         }
         return resolvedType;
@@ -916,52 +968,54 @@ class PathComponent()
 }
 
 shared class VariableCoercionError(shared String variableName)
-    extends QueryError()
+    extends QueryError("Could not coerce variable ``variableName``", null)
 {}
-shared class FieldError(message, path)
-    extends GQLError()
+shared class FieldError(message, locations, path)
+    extends GQLError(message, locations)
 {
-    shared String message;
-    shared Null locations = null;
+    String message;
+    [Location+]? locations;
 
     shared [String, <String|Integer>*] path;
 
     shared String stringPath => "``path.first````"".join(path.rest.map((el)=>if (is String el) then "/``el``" else "[``el.string``]"))``";
 }
-shared class ArgumentCoercionError(path, argumentName)
-    extends FieldError("argument coercion", path) //TODO
+shared class ArgumentCoercionError([Location+]? locations, path, argumentName)
+    extends FieldError("argument coercion", locations, path) //TODO
 {
     [String, <String|Integer>*] path;
     shared String argumentName;
 }
 
-shared class ResultCoercionError(path, CoercionError coercionError)
-    extends FieldError("result coercion: ``coercionError.message``", path) // TODO
+shared class ResultCoercionError([Location+]? locations, path, CoercionError coercionError)
+    extends FieldError("Result coercion: ``coercionError.message``", locations, path)
 {
     [String, <String|Integer>*] path;
 }
 
-shared class ResolvingError(path)
-    extends FieldError("resolving", path)//TODO
+shared class ResolutionError([Location+]? locations, path)
+    extends FieldError("Could not resolve field", locations, path)
 {
     [String, <String|Integer>*] path;
 }
-shared class FieldNullError(path)
-        extends FieldError("null", path)//TODO
+shared class FieldNullError([Location+]? locations, path)
+        extends FieldError("Resolved null value for NON_NULL field", locations, path)
 {
     [String, <String|Integer>*] path;
 }
-shared class ResolvedNotIterableError(path)
-        extends FieldError("not iterable", path)//TODO
+shared class ResolvedNotIterableError([Location+]? locations, path)
+        extends FieldError("Resolved value for LIST field is not an Iterable", locations, path)
 {
     [String, <String|Integer>*] path;
 }
-shared class ListCompletionError(path)
-        extends FieldError("complete list", path)//TODO
+shared class ListCompletionError([Location+]? locations, path)
+        extends FieldError("Exception while iterating over Iterable for LIST field", locations, path)
 {
     [String, <String|Integer>*] path;
 }
-class NullForError(){}
+
+abstract class NullForError() of nullForError{}
+object nullForError extends NullForError(){}
 
 class RestIterable<Element>(Iterator<Element> startedIterator)
         satisfies {Element*}

@@ -42,7 +42,7 @@ shared void testNestedFragmentForbidden() {
     value document = Document([FragmentDefinition(
         "frag1",
         [Field("f1"),
-            Field("f2", null, null, null, [FragmentSpread("frag1")])
+            Field("f2", null, null, null, null, [FragmentSpread("frag1")])
         ],
         null
     ), OperationDefinition(OperationType.query, [FragmentSpread("frag1")

@@ -16,7 +16,9 @@ import de.dlkw.graphql.exp {
     FragmentSpread,
     InlineFragment,
     Var,
-    Schema
+    Schema,
+    EnumLiteral,
+    IList
 }
 import de.dlkw.graphql.exp.types {
     gqlIntType,
@@ -248,8 +250,8 @@ shared void testFieldWithEnumArgument()
 
     assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (is String a = f.arguments["true"]);
-    assertEquals(a, "boing");
+    assert (is EnumLiteral a = f.arguments["true"]);
+    assertEquals(a.value_, "boing");
 }
 
 test
@@ -300,7 +302,7 @@ shared void testFieldWithIntListArgument()
 
     assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (is Sequence<Var|Anything> a = f.arguments["true"]);
+    assert (is IList<Var|Anything> a = f.arguments["true"]);
     assertEquals(a.size, 3);
     assert (is Integer e0 = a[0]);
     assertEquals(e0, 3);
@@ -325,14 +327,14 @@ shared void testFieldWithStringEnumListArgument()
 
     assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (is Sequence<Var|Anything> a = f.arguments["true"]);
+    assert (is IList<Var|Anything> a = f.arguments["true"]);
     assertEquals(a.size, 3);
-    assert (is String e0 = a[0]);
-    assertEquals(e0, "boing");
+    assert (is EnumLiteral e0 = a[0]);
+    assertEquals(e0.value_, "boing");
     assert (is Var e1 = a[1]);
     assertEquals(e1.name, "vv");
-    assert (is String e2 = a[2]);
-    assertEquals(e2, "boam");
+    assert (is EnumLiteral e2 = a[2]);
+    assertEquals(e2.value_, "boam");
 }
 
 test
@@ -340,7 +342,10 @@ shared void testFieldWithEnumEnumListArgument()
 {
     value enumType = GQLEnumType<E>("Testenum", [GQLEnumValue("k", E.kk), GQLEnumValue("l", E.kl)]);
     value argDef = ArgumentDefinition(GQLInputListType(enumType));
-    Schema schema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType, null, map{"true"->argDef})}), null);
+    Schema schema = Schema(GQLObjectType("q", {GQLField("f", enumType, null, map{"true"->argDef}, false, null, (a, b) {
+        assert (is List<Object?> arg = b["true"]);
+        return arg[0];
+    })}), null);
     String doc = "{f(true:[k, $vv, l])}";
     value parsedDoc = parseDocument(doc, schema);
     if (is ParseError parsedDoc) {
@@ -350,14 +355,20 @@ shared void testFieldWithEnumEnumListArgument()
 
     assert (is Field f = parsedDoc.operationDefinition(null)?.selectionSet?.first);
     assertEquals(f.arguments.size, 1);
-    assert (is Sequence<Var|Anything> a = f.arguments["true"]);
+    assert (is IList<Var|Anything> a = f.arguments["true"]);
     assertEquals(a.size, 3);
-    assert (is E e0 = a[0]);
-    assertEquals(e0, E.kk);
+    assert (is EnumLiteral e0 = a[0]);
+    assertEquals(e0.value_, "k");
     assert (is Var e1 = a[1]);
     assertEquals(e1.name, "vv");
-    assert (is E e2 = a[2]);
-    assertEquals(e2, E.kl);
+    assert (is EnumLiteral e2 = a[2]);
+    assertEquals(e2.value_, "l");
+
+    value res = schema.executeRequest(parsedDoc);
+    value fVal = res.data?.get("f");
+    assert (is String fVal);
+    assert (fVal == "k");
+    print(res);
 }
 
 test
@@ -608,7 +619,7 @@ test
 shared void testFieldSkipDirective()
 {
     Schema schema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType)}), null);
-    String doc = "{f @skip(if:false)}";
+    String doc = "{f @skip(if:true)}";
     value parsedDoc = parseDocument(doc, schema);
     if (is ParseError parsedDoc) {
         print(parsedDoc.errorInfos);

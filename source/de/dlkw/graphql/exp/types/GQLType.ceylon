@@ -109,14 +109,18 @@ shared class CoercionError(message)
 
 shared class TypeKind of scalar|\iobject|\iinterface|union|enum|inputObject|list|nonNull
 {
-    shared new scalar{}
-    shared new \iobject{}
-    shared new \iinterface{}
-    shared new union{}
-    shared new enum{}
-    shared new inputObject{}
-    shared new list{}
-    shared new nonNull{}
+    String s;
+
+    shared new scalar{s="SCALAR";}
+    shared new \iobject{s="OBJECT";}
+    shared new \iinterface{s="INTERFACE";}
+    shared new union{s="UNION";}
+    shared new enum{s="ENUM";}
+    shared new inputObject{s="INPUT_OBJECT";}
+    shared new list{s="LIST";}
+    shared new nonNull{s="NON_NULL";}
+
+    shared actual String string => s;
 }
 
 shared abstract class GQLNullableType<Name>(kind, name, description = null)

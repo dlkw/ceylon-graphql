@@ -22,7 +22,8 @@ import de.dlkw.graphql.exp {
     DocumentValue,
     EnumLiteral,
     IObject,
-    IList
+    IList,
+    Location
 }
 import de.dlkw.graphql.exp.types {
     GQLObjectType,
@@ -39,9 +40,12 @@ import java.util {
     JList=List,
     JArrayList=ArrayList
 }
+import org.antlr.v4.runtime {
+    ParserRuleContext
+}
 
 shared void run() {
-    Schema simplestSchema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType)}), null);
+    Schema simplestSchema = Schema(GQLObjectType("q", {GQLField("f", gqlStringType)}), null, []);
     value result = parseDocument("query\n  1 xuu @a { i:y(i:6) @f { jj:z 2 ... on O{zz}} } fragment a on C { b }", simplestSchema);
     if (is ParseError result) {
         print("\n".join(result.errorInfos));
@@ -60,7 +64,7 @@ shared Document|ParseError parseDocument(String documentString, Schema schema)
     GraphQLParser.DocumentContext dc = p.parseDocument(documentString, errors);
     if (!errors.empty) {
         // don't want to introduce an API module for an ErrorInfo interface (yet), so map the structures for now.
-        value errorInfos = { for (jErrorInfo in errors) ErrorInfo(jErrorInfo.message, jErrorInfo.line, jErrorInfo.charPositionInLine + 1) }.sequence();
+        value errorInfos = { for (jErrorInfo in errors) ErrorInfo(jErrorInfo.message, Location(jErrorInfo.line, jErrorInfo.charPositionInLine + 1)) }.sequence();
         assert (nonempty errorInfos);
         return ParseError(errorInfos);
     }
@@ -68,9 +72,14 @@ shared Document|ParseError parseDocument(String documentString, Schema schema)
 }
 
 shared class ParseError(shared [ErrorInfo+] errorInfos){}
-shared class ErrorInfo(shared String message, shared Integer line, shared Integer charPositionInLine)
+shared class ErrorInfo(shared String message, shared Location location)
 {
-    string => "l``line``c``charPositionInLine``: ``message``";
+    string => "L``location.line``/C``location.column``: ``message``";
+}
+
+Location startLocation(ParserRuleContext context)
+{
+    return Location(context.start.line, context.start.charPositionInLine + 1);
 }
 
 Document | ParseError createDocument(GraphQLParser.DocumentContext documentContext, Schema schema)
@@ -164,7 +173,7 @@ DocumentValue<V> convertValueOrVariable<V>(GraphQLParser.ValueOrVariableContext 
     given V satisfies Var
 {
     if (exists varContext = valueOrVariableContext.variable()) {
-        value var = Var(varContext.name().text);
+        value var = Var(varContext.name().text, startLocation(varContext));
         // prevent variables when only values are allowed
         assert (is V var); // FIXME do error
         return var;
@@ -202,13 +211,13 @@ DocumentValue<V> convertValue<V>(GraphQLParser.ValueContext val)
         value_ = val.text == "true";
     }
     case (is GraphQLParser.EnumValueContext) {
-        value_ = EnumLiteral(val.text);
+        value_ = EnumLiteral(val.text, startLocation(val));
     }
     case (is GraphQLParser.ArrayValueContext) {
-        value_ = IList<V>([ for (valOrVar in val.array().valueOrVariable()) convertValueOrVariable<V>(valOrVar) ]);
+        value_ = IList<V>([ for (valOrVar in val.array().valueOrVariable()) convertValueOrVariable<V>(valOrVar) ], startLocation(val));
     }
     case (is GraphQLParser.ObjectValueContext) {
-        value_ = IObject<V>({ for (arg in val.\iobject().argument()) arg.name().text -> convertValueOrVariable<V>(arg.valueOrVariable()) });
+        value_ = IObject<V>({ for (arg in val.\iobject().argument()) arg.name().text -> convertValueOrVariable<V>(arg.valueOrVariable()) }, startLocation(val));
     }
     else {
         throw AssertionError("could not create argument of type ``type(val)``");
@@ -221,7 +230,7 @@ Argument | ParseError createArgument(GraphQLParser.ArgumentContext argumentConte
     String name = argumentContext.name().text;
     value valueOrVariableContext = argumentContext.valueOrVariable();
     DocumentValue<Var> | Var converted = convertValueOrVariable<Var>(valueOrVariableContext);
-    return Argument(name, converted);
+    return Argument(name, converted, startLocation(argumentContext));
 }
 
 [Argument+]? | ParseError createArguments(GraphQLParser.ArgumentsContext? argumentsContext)
@@ -308,7 +317,7 @@ Field | ParseError createField(GraphQLParser.FieldContext fieldContext)
     assert (!is ParseError directives);
     assert (!is ParseError selectionSet);
 
-    return Field(fieldName, fieldAlias, arguments, directives, selectionSet);
+    return Field(fieldName, startLocation(fieldContext), fieldAlias, arguments, directives, selectionSet);
 }
 
 [A+]? | ParseError exP<A>({A|ParseError*} f)
@@ -349,7 +358,7 @@ FragmentDefinition | ParseError createFragmentDefinition(GraphQLParser.FragmentD
     assert (!is ParseError directives);
     assert (!is ParseError selectionSet);
 
-    return FragmentDefinition(name, selectionSet, typeCondition, directives);
+    return FragmentDefinition(name, selectionSet, typeCondition, startLocation(fragmentDefinitionContext), directives);
 }
 
 FragmentSpread | ParseError createFragmentSpread(GraphQLParser.FragmentSpreadContext fragmentSpreadContext)
@@ -359,7 +368,7 @@ FragmentSpread | ParseError createFragmentSpread(GraphQLParser.FragmentSpreadCon
     if (is ParseError directives) {
         return directives;
     }
-    return FragmentSpread(name, directives);
+    return FragmentSpread(name, startLocation(fragmentSpreadContext), directives);
 }
 
 InlineFragment | ParseError createInlineFragment(GraphQLParser.InlineFragmentContext inlineFragmentContext)
@@ -376,7 +385,7 @@ InlineFragment | ParseError createInlineFragment(GraphQLParser.InlineFragmentCon
     assert (!is ParseError directives);
     assert (!is ParseError selectionSet);
 
-    return InlineFragment(selectionSet, typeCondition, directives);
+    return InlineFragment(selectionSet, startLocation(inlineFragmentContext), typeCondition, directives);
 }
 
 [<String->VariableDefinition<Object, String?>>+] | ParseError createVariableDefinitions(GraphQLParser.VariableDefinitionsContext variableDefinitionsContext, Schema schema)
@@ -418,7 +427,7 @@ VariableDefinition<Object, String?> | ParseError createVariableDefinition(GraphQ
             if (is Null inputValue) {
                 throw AssertionError("cannot happen");
             }
-            return ParseError([ErrorInfo("illegal default value <``inputValue``> for variable of type ``registeredType``: ``defaultValue.message``", variableDefinitionContext.start.line, variableDefinitionContext.start.charPositionInLine + 1)]);
+            return ParseError([ErrorInfo("illegal default value <``inputValue``> for variable of type ``registeredType``: ``defaultValue.message``", startLocation(variableDefinitionContext))]);
         }
     }
     // FIXME first type parameter should be set dynamically according to type of c2
@@ -444,9 +453,9 @@ Directive | ParseError createDirective(GraphQLParser.DirectiveContext directiveC
         if (is ParseError arguments) {
             return arguments;
         }
-        return Directive(name, arguments);
+        return Directive(name, startLocation(directiveContext), arguments);
     }
     else {
-        return Directive(name, null);
+        return Directive(name, startLocation(directiveContext), null);
     }
 }

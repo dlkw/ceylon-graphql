@@ -11,7 +11,7 @@ import de.dlkw.graphql.exp {
     OperationDefinition,
     Field,
     OperationType,
-    ResolvingError,
+    ResolutionError,
     FieldNullError
 }
 import de.dlkw.graphql.exp.types {
@@ -100,7 +100,7 @@ shared void singleIntMayBeNullAndIsError() {
 
     assert (exists errors = result.errors);
     assertEquals(errors.size, 1);
-    assert (is ResolvingError error = errors[0]);
+    assert (is ResolutionError error = errors[0]);
     assertEquals(error.stringPath, "f1");
 }
 
@@ -174,7 +174,7 @@ shared void singleIntMayNotBeNullAndIsError() {
 
     assert (exists errors = result.errors);
     assertEquals(errors.size, 1);
-    assert (is ResolvingError error = errors[0]);
+    assert (is ResolutionError error = errors[0]);
     assertEquals(error.stringPath, "f1");
 }
 
@@ -296,7 +296,7 @@ shared void withNonNullBeforeAndAfterIntMayBeNullAndIsError() {
 
     assert (exists errors = result.errors);
     assertEquals(errors.size, 1);
-    assert (is ResolvingError error = errors[0]);
+    assert (is ResolutionError error = errors[0]);
     assertEquals(error.stringPath, "f1");
 }
 
@@ -405,7 +405,7 @@ shared void withNonNullBeforeAndAfterIntMayNotBeNullAndIsError() {
 
     assert (exists errors = result.errors);
     assertEquals(errors.size, 1);
-    assert (is ResolvingError error = errors[0]);
+    assert (is ResolutionError error = errors[0]);
     assertEquals(error.stringPath, "f1");
 }
 
@@ -448,9 +448,9 @@ shared void withErrorsBeforeAndAfterIntMayNotBeNullAndIsNotNull() {
 
     assert (exists errors = result.errors);
     assertEquals(errors.size, 2);
-    assert (is ResolvingError error0 = errors[0]);
+    assert (is ResolutionError error0 = errors[0]);
     assertEquals(error0.stringPath, "f0");
-    assert (is ResolvingError error1 = errors[1]);
+    assert (is ResolutionError error1 = errors[1]);
     assertEquals(error1.stringPath, "f2");
 }
 
@@ -485,11 +485,11 @@ shared void withErrorsBeforeAndAfterIntMayNotBeNullAndIsNull() {
 
     assert (exists errors = result.errors);
     assertEquals(errors.size, 3);
-    assert (is ResolvingError error0 = errors[0]);
+    assert (is ResolutionError error0 = errors[0]);
     assertEquals(error0.stringPath, "f0");
     assert (is FieldNullError error1 = errors[1]);
     assertEquals(error1.stringPath, "f1");
-    assert (is ResolvingError error2 = errors[2]);
+    assert (is ResolutionError error2 = errors[2]);
     assertEquals(error2.stringPath, "f2");
 }
 
@@ -531,10 +531,10 @@ shared void withErrorsBeforeAndAfterIntMayBeNullAndIsError() {
 
     assert (exists errors = result.errors);
     assertEquals(errors.size, 3);
-    assert (is ResolvingError error0 = errors[0]);
+    assert (is ResolutionError error0 = errors[0]);
     assertEquals(error0.stringPath, "f0");
-    assert (is ResolvingError error1 = errors[1]);
+    assert (is ResolutionError error1 = errors[1]);
     assertEquals(error1.stringPath, "f1");
-    assert (is ResolvingError error2 = errors[2]);
+    assert (is ResolutionError error2 = errors[2]);
     assertEquals(error2.stringPath, "f2");
 }
